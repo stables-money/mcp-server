@@ -1,0 +1,58 @@
+{
+  "name": "stables-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Stables fiat-to-crypto API - enables AI agents to manage customers, quotes, and transfers",
+  "type": "module",
+  "main": "build/index.js",
+  "bin": {
+    "stables-mcp-server": "./build/index.js"
+  },
+  "files": [
+    "build",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js",
+    "dev": "tsc --watch",
+    "inspect": "npx @modelcontextprotocol/inspector node build/index.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "stables",
+    "crypto",
+    "fiat",
+    "stablecoin",
+    "payments",
+    "ai-agents",
+    "model-context-protocol",
+    "claude",
+    "chatgpt"
+  ],
+  "author": "Stables (https://stables.money)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stables-money/mcp-server.git"
+  },
+  "homepage": "https://docs.stables.money",
+  "bugs": {
+    "url": "https://github.com/stables-money/mcp-server/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
