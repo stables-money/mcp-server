@@ -1,7 +1,6 @@
 /**
  * Webhook Management Tools for Stables MCP Server
- * Updated to match official Stables API docs
- * Uses eventTypes (not events), includes name and secret fields
+ * Synced with OpenAPI spec from https://api.sandbox.stables.money/docs
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -16,14 +15,22 @@ export function registerWebhookTools(server: McpServer, client: StablesApiClient
 
 Available event types:
 - WEBHOOK_EVENT_TYPE_CUSTOMER_CREATED
+- WEBHOOK_EVENT_TYPE_CUSTOMER_UPDATED
 - WEBHOOK_EVENT_TYPE_KYC_STATUS_CHANGED
+- WEBHOOK_EVENT_TYPE_PAYMENT_CREATED
 - WEBHOOK_EVENT_TYPE_PAYMENT_STATUS_CHANGED
+- WEBHOOK_EVENT_TYPE_QUOTE_CREATED
+- WEBHOOK_EVENT_TYPE_QUOTE_EXPIRED
+- WEBHOOK_EVENT_TYPE_VA_DEPOSIT_RECEIVED
+- WEBHOOK_EVENT_TYPE_VA_PAYOUT_COMPLETED
+- WEBHOOK_EVENT_TYPE_VA_PAYOUT_FAILED
+- WEBHOOK_EVENT_TYPE_ALL
 
 Security: Set a secret to enable HMAC-SHA256 signature verification via X-Webhook-Signature header.`,
     {
       name: z.string().describe("A descriptive name for this webhook (e.g., 'Payment Status Notifications')"),
       url: z.string().url().describe("The HTTPS URL to receive webhook POST requests"),
-      eventTypes: z.array(z.string()).describe("List of event types to subscribe to (e.g., ['WEBHOOK_EVENT_TYPE_CUSTOMER_CREATED', 'WEBHOOK_EVENT_TYPE_PAYMENT_STATUS_CHANGED'])"),
+      eventTypes: z.array(z.string()).describe("List of event types to subscribe to (e.g., ['WEBHOOK_EVENT_TYPE_PAYMENT_STATUS_CHANGED'])"),
       secret: z.string().optional().describe("Optional signing secret for HMAC-SHA256 webhook signature verification"),
     },
     async ({ name, url, eventTypes, secret }) => {
@@ -80,10 +87,11 @@ Tip: Return 200 quickly and process events asynchronously. Use eventId for idemp
                 type: "text",
                 text: `No webhooks configured. Use 'create_webhook' to subscribe to events.
 
-Available event types:
-- WEBHOOK_EVENT_TYPE_CUSTOMER_CREATED
+Available event types include:
+- WEBHOOK_EVENT_TYPE_PAYMENT_STATUS_CHANGED
 - WEBHOOK_EVENT_TYPE_KYC_STATUS_CHANGED
-- WEBHOOK_EVENT_TYPE_PAYMENT_STATUS_CHANGED`,
+- WEBHOOK_EVENT_TYPE_VA_DEPOSIT_RECEIVED
+- WEBHOOK_EVENT_TYPE_ALL (subscribe to everything)`,
               },
             ],
           };
@@ -91,8 +99,7 @@ Available event types:
 
         const webhookList = response.subscriptions.map((w) => {
           const status = w.active ? "Active" : "Inactive";
-          const id = w.subscriptionId || (w as unknown as { id: string }).id;
-          return `- ${id}: "${w.name}" → ${w.url} (${status})\n  Events: ${w.eventTypes.join(", ")}`;
+          return `- ${w.subscriptionId}: "${w.name}" -> ${w.url} (${status})\n  Events: ${w.eventTypes.join(", ")}`;
         }).join("\n\n");
 
         return {

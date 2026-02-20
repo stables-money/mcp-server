@@ -1,7 +1,6 @@
 /**
  * Transfer Tools for Stables MCP Server
- * Updated to match official Stables API docs
- * Currently supports crypto → fiat (off-ramp) transfers
+ * Synced with OpenAPI spec from https://api.sandbox.stables.money/docs
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -22,12 +21,15 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
       bankName: z.string().optional().describe("Name of the destination bank"),
       bankCountry: z.string().optional().describe("Two-letter country code of the bank (e.g., 'GR', 'US')"),
       bankCurrency: z.string().optional().describe("Currency for the bank payout (e.g., 'EUR', 'USD')"),
+      accountType: z.enum(["savings", "checking", "payment"]).optional().describe("Type of bank account"),
       swiftCode: z.string().optional().describe("SWIFT/BIC code for international transfers"),
-      routingNumber: z.string().optional().describe("Routing number (for US bank transfers)"),
-      sortCode: z.string().optional().describe("Sort code (for UK bank transfers)"),
+      routingNumber: z.string().optional().describe("ABA routing number (US)"),
+      sortCode: z.string().optional().describe("Sort code (UK)"),
+      ifscCode: z.string().optional().describe("IFSC code (India)"),
+      bsbCode: z.string().optional().describe("BSB code (Australia)"),
       metadata: z.record(z.string()).optional().describe("Optional metadata to attach to the transfer"),
     },
-    async ({ customerId, quoteId, accountHolderName, iban, accountNumber, bankName, bankCountry, bankCurrency, swiftCode, routingNumber, sortCode, metadata }) => {
+    async ({ customerId, quoteId, accountHolderName, iban, accountNumber, bankName, bankCountry, bankCurrency, accountType, swiftCode, routingNumber, sortCode, ifscCode, bsbCode, metadata }) => {
       try {
         // Build payment method if bank details provided
         const paymentMethod = accountHolderName ? {
@@ -35,13 +37,16 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
             accountHolderName,
             iban,
             accountNumber,
-            bankName,
-            bankCountry,
-            currency: bankCurrency,
-            bankCodes: (swiftCode || routingNumber || sortCode) ? {
+            bankName: bankName || "",
+            bankCountry: bankCountry || "",
+            currency: bankCurrency || "",
+            accountType,
+            bankCodes: (swiftCode || routingNumber || sortCode || ifscCode || bsbCode) ? {
               swiftCode,
-              routingNumber,
+              abaCode: routingNumber,
               sortCode,
+              ifscCode,
+              bsbCode,
             } : undefined,
           },
         } : undefined;

@@ -1,6 +1,6 @@
 {
   "name": "stables-mcp-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MCP server for Stables fiat-to-crypto API - enables AI agents to manage customers, quotes, and transfers",
   "type": "module",
   "main": "build/index.js",

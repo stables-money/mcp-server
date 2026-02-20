@@ -1,6 +1,6 @@
 /**
  * Customer Management Tools for Stables MCP Server
- * Updated to match official Stables API docs
+ * Synced with OpenAPI spec from https://api.sandbox.stables.money/docs
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -18,12 +18,12 @@ export function registerCustomerTools(server: McpServer, client: StablesApiClien
       firstName: z.string().optional().describe("First name (required for individuals)"),
       lastName: z.string().optional().describe("Last name (required for individuals)"),
       middleName: z.string().optional().describe("Middle name"),
-      businessName: z.string().optional().describe("Business name (required for businesses)"),
+      companyName: z.string().optional().describe("Company name (required for businesses)"),
       externalCustomerId: z.string().optional().describe("Your own reference ID for this customer"),
       phone: z.string().optional().describe("Phone number with country code (e.g., '+14155552671')"),
       dob: z.string().optional().describe("Date of birth in YYYY-MM-DD format (e.g., '1990-01-15')"),
       nationality: z.string().optional().describe("Two-letter country code (e.g., 'US', 'GB')"),
-      entitlements: z.array(z.string()).optional().describe("List of entitlements to request (e.g., ['base_payout'])"),
+      entitlements: z.array(z.string()).optional().describe("List of entitlements to request (e.g., ['base_payout', 'virtual_account'])"),
       addressLine1: z.string().optional().describe("Street address line 1"),
       addressLine2: z.string().optional().describe("Street address line 2"),
       addressCity: z.string().optional().describe("City"),
@@ -31,7 +31,7 @@ export function registerCustomerTools(server: McpServer, client: StablesApiClien
       addressPostalCode: z.string().optional().describe("Postal/ZIP code"),
       addressCountry: z.string().optional().describe("Two-letter country code (e.g., 'US')"),
     },
-    async ({ email, customerType, firstName, lastName, middleName, businessName, externalCustomerId, phone, dob, nationality, entitlements, addressLine1, addressLine2, addressCity, addressState, addressPostalCode, addressCountry }) => {
+    async ({ email, customerType, firstName, lastName, middleName, companyName, externalCustomerId, phone, dob, nationality, entitlements, addressLine1, addressLine2, addressCity, addressState, addressPostalCode, addressCountry }) => {
       try {
         const address = addressLine1 ? {
           line1: addressLine1,
@@ -50,7 +50,7 @@ export function registerCustomerTools(server: McpServer, client: StablesApiClien
           firstName,
           lastName,
           middleName,
-          businessName,
+          companyName,
           externalCustomerId: externalCustomerId || crypto.randomUUID(),
           phone,
           dob,
@@ -60,6 +60,7 @@ export function registerCustomerTools(server: McpServer, client: StablesApiClien
         });
 
         const verificationStatus = customer.verificationLevels?.[0]?.status || "NOT_STARTED";
+        const entitlementsList = customer.entitlements?.map(e => `${e.name}: ${e.status}`).join(", ") || "None";
 
         return {
           content: [
@@ -71,10 +72,10 @@ Customer ID: ${customer.customerId}
 Email: ${customer.email}
 Type: ${customerType}
 ${firstName ? `Name: ${firstName}${middleName ? ` ${middleName}` : ""} ${lastName || ""}` : ""}
-${businessName ? `Business: ${businessName}` : ""}
+${companyName ? `Company: ${companyName}` : ""}
 ${phone ? `Phone: ${phone}` : ""}
 ${nationality ? `Nationality: ${nationality}` : ""}
-${entitlements?.length ? `Entitlements: ${entitlements.join(", ")}` : ""}
+Entitlements: ${entitlementsList}
 Verification Status: ${verificationStatus}
 Created: ${customer.createdAt}
 
@@ -109,6 +110,7 @@ Next step: Use 'get_verification_link' to get a KYC verification link for this c
 
         const verificationStatus = customer.verificationLevels?.[0]?.status || "NOT_STARTED";
         const isVerified = verificationStatus === "VERIFICATION_APPROVED";
+        const entitlementsList = customer.entitlements?.map(e => `${e.name}: ${e.status}`).join(", ") || "None";
 
         return {
           content: [
@@ -119,11 +121,10 @@ Next step: Use 'get_verification_link' to get a KYC verification link for this c
 Customer ID: ${customer.customerId}
 Email: ${customer.email || "Not set"}
 Type: ${customer.customerType}
-${customer.firstName ? `Name: ${customer.firstName}${customer.middleName ? ` ${customer.middleName}` : ""} ${customer.lastName || ""}` : ""}
-${customer.businessName ? `Business: ${customer.businessName}` : ""}
+${customer.firstName ? `Name: ${customer.firstName} ${customer.lastName || ""}` : ""}
+${customer.companyName ? `Company: ${customer.companyName}` : ""}
 ${customer.phone ? `Phone: ${customer.phone}` : ""}
-${customer.nationality ? `Nationality: ${customer.nationality}` : ""}
-${customer.dob ? `Date of Birth: ${customer.dob}` : ""}
+Entitlements: ${entitlementsList}
 Verification Status: ${verificationStatus}
 Can Transfer: ${isVerified ? "Yes" : "No - needs KYC verification"}
 Created: ${customer.createdAt}
@@ -148,14 +149,11 @@ Updated: ${customer.updatedAt}`,
   // List Customers
   server.tool(
     "list_customers",
-    "List all customers with optional pagination",
-    {
-      pageSize: z.number().optional().describe("Number of customers per page (default: 20)"),
-      pageToken: z.string().optional().describe("Token for the next page of results"),
-    },
-    async ({ pageSize, pageToken }) => {
+    "List all customers for the authenticated tenant",
+    {},
+    async () => {
       try {
-        const response = await client.listCustomers({ pageSize, pageToken });
+        const response = await client.listCustomers();
 
         if (response.customers.length === 0) {
           return {
@@ -177,10 +175,9 @@ Updated: ${customer.updatedAt}`,
           content: [
             {
               type: "text",
-              text: `Customers (${response.customers.length} of ${response.page.total}):
+              text: `Customers (${response.customers.length}):
 
-${customerList}
-${response.page.nextPageToken ? `\nMore results available. Use pageToken: "${response.page.nextPageToken}"` : ""}`,
+${customerList}`,
             },
           ],
         };
@@ -204,13 +201,23 @@ ${response.page.nextPageToken ? `\nMore results available. Use pageToken: "${res
     "Generate a KYC verification link for a customer. The customer must complete verification before they can make transfers.",
     {
       customerId: z.string().describe("The customer ID to generate verification link for"),
-      verificationType: z.enum(["KYC", "KYB"]).optional().describe("Type of verification - KYC for individuals, KYB for businesses"),
+      ttlInSecs: z.number().optional().describe("Time-to-live for the KYC link in seconds (default: 1800)"),
+      successUrl: z.string().optional().describe("URL to redirect to after successful verification"),
+      rejectUrl: z.string().optional().describe("URL to redirect to after rejected verification"),
     },
-    async ({ customerId, verificationType }) => {
+    async ({ customerId, ttlInSecs, successUrl, rejectUrl }) => {
       try {
+        const redirect = (successUrl || rejectUrl) ? {
+          successUrl,
+          rejectUrl,
+        } : undefined;
+
         const result = await client.generateVerificationLink(customerId, {
-          verificationType,
+          ttlInSecs,
+          redirect,
         });
+
+        const ttlDisplay = ttlInSecs ? `${Math.floor(ttlInSecs / 60)} minutes` : "30 minutes (default)";
 
         return {
           content: [
@@ -221,7 +228,8 @@ ${response.page.nextPageToken ? `\nMore results available. Use pageToken: "${res
 Customer ID: ${result.customerId}
 Verification Link: ${result.kycLink}
 
-Share this link with the customer to complete their identity verification. The link will expire in 24 hours.`,
+The link will expire in ${ttlDisplay}.
+Share this link with the customer to complete their identity verification.`,
             },
           ],
         };
@@ -231,6 +239,91 @@ Share this link with the customer to complete their identity verification. The l
             {
               type: "text",
               text: `Failed to generate verification link: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Update Customer
+  server.tool(
+    "update_customer",
+    "Update customer details, entitlements, or verification information",
+    {
+      customerId: z.string().describe("The customer ID to update"),
+      email: z.string().optional().describe("Updated email address"),
+      phone: z.string().optional().describe("Updated phone number"),
+      firstName: z.string().optional().describe("Updated first name"),
+      lastName: z.string().optional().describe("Updated last name"),
+      entitlements: z.array(z.string()).optional().describe("Updated entitlements (e.g., ['base_payout', 'virtual_account'])"),
+    },
+    async ({ customerId, email, phone, firstName, lastName, entitlements }) => {
+      try {
+        const updates: Record<string, unknown> = {};
+        if (email) updates.email = email;
+        if (phone) updates.phone = phone;
+        if (firstName) updates.firstName = firstName;
+        if (lastName) updates.lastName = lastName;
+        if (entitlements) updates.entitlements = entitlements;
+
+        const customer = await client.updateCustomer(customerId, updates);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Customer ${customer.customerId} updated successfully.
+
+Email: ${customer.email}
+${customer.firstName ? `Name: ${customer.firstName} ${customer.lastName || ""}` : ""}
+Updated: ${customer.updatedAt}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to update customer: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Update Metadata
+  server.tool(
+    "update_customer_metadata",
+    "Update customer metadata key-value pairs",
+    {
+      customerId: z.string().describe("The customer ID to update metadata for"),
+      metadata: z.record(z.string()).describe("Metadata key-value pairs to set"),
+    },
+    async ({ customerId, metadata }) => {
+      try {
+        await client.updateMetadata(customerId, metadata);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Metadata updated for customer ${customerId}.
+
+Keys set: ${Object.keys(metadata).join(", ")}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to update metadata: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
           isError: true,

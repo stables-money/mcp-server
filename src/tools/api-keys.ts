@@ -77,9 +77,8 @@ IMPORTANT: Save the secret key now! It will not be shown again.`,
         }
 
         const keyList = response.apiKeys.map((k) => {
-          const id = k.apiKeyId || k.id;
-          const status = k.active !== false ? "Active" : "Revoked";
-          return `- ${id}: "${k.name}" (${k.prefix}...) - ${status} - Created: ${k.createdAt}`;
+          const status = k.active ? "Active" : "Revoked";
+          return `- ${k.apiKeyId}: "${k.name}" (${k.prefix}...) - ${status} - Created: ${k.createdAt}`;
         }).join("\n");
 
         return {
@@ -115,9 +114,8 @@ ${keyList}`,
     },
     async ({ apiKeyId }) => {
       try {
-        const key = await client.getApiKey(apiKeyId);
-
-        const id = key.apiKeyId || key.id;
+        const response = await client.getApiKey(apiKeyId);
+        const key = response.apiKey;
 
         return {
           content: [
@@ -125,10 +123,10 @@ ${keyList}`,
               type: "text",
               text: `API Key Details:
 
-Key ID: ${id}
+Key ID: ${key.apiKeyId}
 Name: ${key.name}
 Prefix: ${key.prefix}
-Active: ${key.active !== false ? "Yes" : "No"}
+Active: ${key.active ? "Yes" : "No"}
 Created: ${key.createdAt}
 ${key.updatedAt ? `Updated: ${key.updatedAt}` : ""}
 ${key.lastUsedAt ? `Last Used: ${key.lastUsedAt}` : "Never used"}`,
