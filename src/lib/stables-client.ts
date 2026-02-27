@@ -211,6 +211,7 @@ export interface Transfer {
 export interface CreateTransferRequest {
   customerId: string;
   quoteId: string;
+  paymentMethod?: PaymentMethod;
   metadata?: Record<string, string>;
 }
 

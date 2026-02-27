@@ -11,17 +11,50 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
   // Create Transfer
   server.tool(
     "create_transfer",
-    "Execute a transfer using an active quote. The quote must not be expired. This initiates the actual money movement. Bank/payment details are already associated with the quote, so only customerId and quoteId are needed.",
+    "Execute a transfer using an active quote. The quote must not be expired. This initiates the actual money movement. Bank/payment details are required for off-ramp (crypto to fiat) transfers.",
     {
       customerId: z.string().describe("The customer ID for this transfer"),
       quoteId: z.string().describe("The quote ID to execute"),
+      accountHolderName: z.string().optional().describe("Bank account holder's full name (required for off-ramp)"),
+      iban: z.string().optional().describe("IBAN for the destination bank account (EU/international)"),
+      accountNumber: z.string().optional().describe("Bank account number (if not using IBAN)"),
+      bankName: z.string().optional().describe("Name of the destination bank (required for off-ramp)"),
+      bankCountry: z.string().optional().describe("Two-letter country code of the bank (e.g., 'AU', 'US')"),
+      bankCurrency: z.string().optional().describe("Currency for the bank payout (e.g., 'EUR', 'USD', 'AUD')"),
+      accountType: z.enum(["savings", "checking", "payment"]).optional().describe("Type of bank account"),
+      swiftCode: z.string().optional().describe("SWIFT/BIC code for international transfers"),
+      routingNumber: z.string().optional().describe("ABA routing number (US)"),
+      sortCode: z.string().optional().describe("Sort code (UK)"),
+      ifscCode: z.string().optional().describe("IFSC code (India)"),
+      bsbCode: z.string().optional().describe("BSB code (Australia)"),
       metadata: z.record(z.string()).optional().describe("Optional metadata to attach to the transfer"),
     },
-    async ({ customerId, quoteId, metadata }) => {
+    async ({ customerId, quoteId, accountHolderName, iban, accountNumber, bankName, bankCountry, bankCurrency, accountType, swiftCode, routingNumber, sortCode, ifscCode, bsbCode, metadata }) => {
       try {
+        // Build payment method if bank details provided
+        const paymentMethod = accountHolderName ? {
+          bankTransfer: {
+            accountHolderName,
+            ...(iban && { iban }),
+            ...(accountNumber && { accountNumber }),
+            bankName: bankName || "",
+            bankCountry: bankCountry || "",
+            currency: bankCurrency || "",
+            ...(accountType && { accountType }),
+            bankCodes: (swiftCode || routingNumber || sortCode || ifscCode || bsbCode) ? {
+              ...(swiftCode && { swiftCode }),
+              ...(routingNumber && { abaCode: routingNumber }),
+              ...(sortCode && { sortCode }),
+              ...(ifscCode && { ifscCode }),
+              ...(bsbCode && { bsbCode }),
+            } : undefined,
+          },
+        } : undefined;
+
         const transfer = await client.createTransfer({
           customerId,
           quoteId,
+          paymentMethod,
           metadata,
         });
 
