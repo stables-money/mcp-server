@@ -13,6 +13,7 @@ export function registerQuoteTools(server: McpServer, client: StablesApiClient) 
     "create_quote",
     "Get a quote for currency exchange. Quotes show the exchange rate, fees, and amount the customer will receive. Quotes expire after 30 seconds. Currently supports crypto → fiat (off-ramp) with more types coming soon.",
     {
+      customerId: z.string().optional().describe("The customer ID to associate this quote with. Required if the quote will be used to create a transfer."),
       fromCurrency: z.enum(["USDC", "USDT"]).describe("Source cryptocurrency (USDC or USDT)"),
       fromAmount: z.string().describe("Amount to convert (e.g., '125.75')"),
       fromNetwork: z.enum(["ethereum", "polygon", "polygon-amoy"]).describe("Blockchain network for the source crypto"),
@@ -20,9 +21,10 @@ export function registerQuoteTools(server: McpServer, client: StablesApiClient) 
       toCountry: z.string().describe("Destination country code (e.g., 'GR', 'US', 'GB')"),
       paymentMethodType: z.enum(["SWIFT", "LOCAL"]).describe("Payment method for fiat payouts - 'SWIFT' for international, 'LOCAL' for domestic rails"),
     },
-    async ({ fromCurrency, fromAmount, fromNetwork, toCurrency, toCountry, paymentMethodType }) => {
+    async ({ customerId, fromCurrency, fromAmount, fromNetwork, toCurrency, toCountry, paymentMethodType }) => {
       try {
         const response = await client.createQuote({
+          customerId,
           from: {
             currency: fromCurrency,
             amount: fromAmount,

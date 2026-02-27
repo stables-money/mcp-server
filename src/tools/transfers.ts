@@ -11,50 +11,17 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
   // Create Transfer
   server.tool(
     "create_transfer",
-    "Execute a transfer using an active quote. The quote must not be expired. This initiates the actual money movement. For off-ramp (crypto to fiat), include bank transfer details as the payment method.",
+    "Execute a transfer using an active quote. The quote must not be expired. This initiates the actual money movement. Bank/payment details are already associated with the quote, so only customerId and quoteId are needed.",
     {
       customerId: z.string().describe("The customer ID for this transfer"),
       quoteId: z.string().describe("The quote ID to execute"),
-      accountHolderName: z.string().optional().describe("Bank account holder's full name (required for off-ramp)"),
-      iban: z.string().optional().describe("IBAN for the destination bank account"),
-      accountNumber: z.string().optional().describe("Bank account number (if not using IBAN)"),
-      bankName: z.string().optional().describe("Name of the destination bank"),
-      bankCountry: z.string().optional().describe("Two-letter country code of the bank (e.g., 'GR', 'US')"),
-      bankCurrency: z.string().optional().describe("Currency for the bank payout (e.g., 'EUR', 'USD')"),
-      accountType: z.enum(["savings", "checking", "payment"]).optional().describe("Type of bank account"),
-      swiftCode: z.string().optional().describe("SWIFT/BIC code for international transfers"),
-      routingNumber: z.string().optional().describe("ABA routing number (US)"),
-      sortCode: z.string().optional().describe("Sort code (UK)"),
-      ifscCode: z.string().optional().describe("IFSC code (India)"),
-      bsbCode: z.string().optional().describe("BSB code (Australia)"),
       metadata: z.record(z.string()).optional().describe("Optional metadata to attach to the transfer"),
     },
-    async ({ customerId, quoteId, accountHolderName, iban, accountNumber, bankName, bankCountry, bankCurrency, accountType, swiftCode, routingNumber, sortCode, ifscCode, bsbCode, metadata }) => {
+    async ({ customerId, quoteId, metadata }) => {
       try {
-        // Build payment method if bank details provided
-        const paymentMethod = accountHolderName ? {
-          bankTransfer: {
-            accountHolderName,
-            iban,
-            accountNumber,
-            bankName: bankName || "",
-            bankCountry: bankCountry || "",
-            currency: bankCurrency || "",
-            accountType,
-            bankCodes: (swiftCode || routingNumber || sortCode || ifscCode || bsbCode) ? {
-              swiftCode,
-              abaCode: routingNumber,
-              sortCode,
-              ifscCode,
-              bsbCode,
-            } : undefined,
-          },
-        } : undefined;
-
         const transfer = await client.createTransfer({
           customerId,
           quoteId,
-          paymentMethod,
           metadata,
         });
 
@@ -92,12 +59,15 @@ Use 'get_transfer' to check the status.`,
             },
           ],
         };
-      } catch (error) {
+      } catch (error: unknown) {
+        const apiError = error as { message?: string; statusCode?: number; errorBody?: unknown };
+        const details = apiError.errorBody ? `\nAPI Response: ${JSON.stringify(apiError.errorBody, null, 2)}` : "";
+        const status = apiError.statusCode ? ` (HTTP ${apiError.statusCode})` : "";
         return {
           content: [
             {
               type: "text",
-              text: `Failed to create transfer: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: `Failed to create transfer${status}: ${error instanceof Error ? error.message : "Unknown error"}${details}`,
             },
           ],
           isError: true,
