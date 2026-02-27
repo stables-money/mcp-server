@@ -3,7 +3,22 @@
  * Synced with OpenAPI spec from https://api.sandbox.stables.money/docs
  */
 
-// Customer Types
+// ============ CUSTOM ERROR ============
+
+export class StablesApiError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode: number,
+    public readonly endpoint: string,
+    public readonly errorBody?: unknown
+  ) {
+    super(message);
+    this.name = "StablesApiError";
+  }
+}
+
+// ============ CUSTOMER TYPES ============
+
 export type CustomerType = "CUSTOMER_TYPE_INDIVIDUAL" | "CUSTOMER_TYPE_BUSINESS";
 
 export type VerificationStatus =
@@ -55,14 +70,13 @@ export interface Customer {
   metadata?: Record<string, string>;
 }
 
-export interface CreateCustomerRequest {
+export interface CreateIndividualCustomerRequest {
   externalCustomerId: string;
-  customerType: CustomerType;
+  customerType: "CUSTOMER_TYPE_INDIVIDUAL";
   email?: string;
   firstName?: string;
   lastName?: string;
   middleName?: string;
-  companyName?: string;
   phone?: string;
   dob?: string;
   nationality?: string;
@@ -71,11 +85,52 @@ export interface CreateCustomerRequest {
   metadata?: Record<string, string>;
 }
 
+export interface CreateBusinessCustomerRequest {
+  externalCustomerId: string;
+  customerType: "CUSTOMER_TYPE_BUSINESS";
+  email?: string;
+  phone?: string;
+  companyName: string;
+  country?: string;
+  registrationNumber?: string;
+  legalAddress?: CustomerAddress;
+  incorporatedOn?: string;
+  type?: string;
+  taxId?: string;
+  registrationLocation?: string;
+  website?: string;
+  postalAddress?: CustomerAddress;
+  alternativeNames?: string[];
+  describeBusiness?: string;
+  conductMoneyServices?: boolean;
+  describeMoneyServices?: string;
+  describeComplianceControls?: string;
+  accountPurpose?: string;
+  accountPurposeOther?: string;
+  isYourBusinessADao?: boolean;
+  industrySelection?: string;
+  mainSourceOfFunds?: string;
+  sourceOfFunds?: string;
+  sourceOfFundsDescription?: string;
+  expectedAnnualRevenue?: string;
+  expectedMonthlyPayments?: string;
+  doesYourBusinessEngageInHighRiskActivities?: "yes" | "no";
+  highRiskActivities?: string[];
+  operateInProhibitedCountry?: boolean;
+  acceptTerms?: boolean;
+  howDidYouComeAcrossStables?: string;
+  entitlements?: string[];
+  metadata?: Record<string, string>;
+}
+
+export type CreateCustomerRequest = CreateIndividualCustomerRequest | CreateBusinessCustomerRequest;
+
 export interface ListCustomersResponse {
   customers: Customer[];
 }
 
-// Verification Link Types
+// ============ VERIFICATION LINK TYPES ============
+
 export interface VerificationRedirect {
   successUrl?: string;
   rejectUrl?: string;
@@ -93,7 +148,8 @@ export interface GenerateVerificationLinkResponse {
   kycLink: string;
 }
 
-// Transfer Types
+// ============ TRANSFER TYPES ============
+
 export type TransferType = "TRANSFER_TYPE_OFFRAMP" | "TRANSFER_TYPE_ONRAMP";
 
 export type TransferStatus =
@@ -167,7 +223,8 @@ export interface ListTransfersResponse {
   };
 }
 
-// Virtual Account Types
+// ============ VIRTUAL ACCOUNT TYPES ============
+
 export type VirtualAccountStatus = "activated" | "deactivated" | "pending" | "closed";
 export type PaymentRail = "arbitrum" | "avalanche_c_chain" | "base" | "celo" | "ethereum" | "optimism" | "polygon" | "solana" | "stellar" | "tron";
 export type Stablecoin = "usdc" | "usdt" | "dai" | "pyusd" | "eurc";
@@ -236,7 +293,8 @@ export interface VirtualAccountHistoryEvent {
   created_at: string;
 }
 
-// Quote Types
+// ============ QUOTE TYPES ============
+
 export type QuoteStatus = "QUOTE_STATUS_ACTIVE" | "QUOTE_STATUS_EXPIRED" | "QUOTE_STATUS_USED" | "QUOTE_STATUS_CANCELLED";
 export type PaymentMethodType = "SWIFT" | "LOCAL";
 export type QuoteNetwork = "ethereum" | "polygon" | "polygon-amoy";
@@ -292,7 +350,8 @@ export interface CreateQuoteResponse {
   quote: Quote;
 }
 
-// API Key Types
+// ============ API KEY TYPES ============
+
 export interface ApiKey {
   apiKeyId: string;
   tenantId: string;
@@ -315,7 +374,8 @@ export interface CreateApiKeyResponse {
   plaintextKey: string;
 }
 
-// Webhook Types
+// ============ WEBHOOK TYPES ============
+
 export interface WebhookSubscription {
   subscriptionId: string;
   name: string;
@@ -335,7 +395,12 @@ export interface CreateWebhookRequest {
   metadata?: Record<string, string>;
 }
 
-// API Client
+// ============ API CLIENT ============
+
+const REQUEST_TIMEOUT_MS = 30_000;
+const MAX_RETRIES = 3;
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+
 export class StablesApiClient {
   private apiKey: string;
   private baseUrl: string;
@@ -360,29 +425,95 @@ export class StablesApiClient {
       headers["Content-Type"] = "application/json";
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => null);
-      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      });
 
-      if (errorBody) {
-        if (errorBody.error?.message) {
-          errorMessage = errorBody.error.message;
-        } else if (errorBody.message) {
-          errorMessage = errorBody.message;
-        } else if (typeof errorBody.error === "string") {
-          errorMessage = errorBody.error;
+      if (!response.ok) {
+        // Handle rate limiting
+        if (response.status === 429) {
+          const retryAfter = response.headers.get("Retry-After");
+          const waitSecs = retryAfter ? parseInt(retryAfter, 10) : 60;
+          throw new StablesApiError(
+            `Rate limited. Retry after ${waitSecs} seconds.`,
+            429,
+            endpoint
+          );
         }
+
+        const errorBody = await response.json().catch(() => null);
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+
+        if (errorBody) {
+          if (errorBody.error?.message) {
+            errorMessage = errorBody.error.message;
+          } else if (errorBody.message) {
+            errorMessage = errorBody.message;
+          } else if (typeof errorBody.error === "string") {
+            errorMessage = errorBody.error;
+          }
+        }
+
+        throw new StablesApiError(errorMessage, response.status, endpoint, errorBody);
       }
 
-      throw new Error(errorMessage);
+      // Handle empty responses (e.g., 204 No Content)
+      if (response.status === 204 || response.headers.get("content-length") === "0") {
+        return {} as T;
+      }
+
+      return response.json();
+    } catch (error) {
+      if (error instanceof StablesApiError) {
+        throw error;
+      }
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new StablesApiError(
+          `Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`,
+          0,
+          endpoint
+        );
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  private async requestWithRetry<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    let lastError: Error | undefined;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        return await this.request<T>(endpoint, options);
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        // Don't retry client errors (except 429 rate limits)
+        if (error instanceof StablesApiError) {
+          if (error.statusCode >= 400 && error.statusCode < 500 && !RETRYABLE_STATUS_CODES.has(error.statusCode)) {
+            throw error;
+          }
+        }
+
+        if (attempt < MAX_RETRIES) {
+          const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+          const jitter = Math.random() * 500;
+          await new Promise(resolve => setTimeout(resolve, delay + jitter));
+        }
+      }
     }
 
-    return response.json();
+    throw lastError;
   }
 
   private generateIdempotencyKey(): string {
@@ -392,15 +523,15 @@ export class StablesApiClient {
   // ============ CUSTOMERS ============
 
   async listCustomers(): Promise<ListCustomersResponse> {
-    return this.request<ListCustomersResponse>("/api/v1/customers");
+    return this.requestWithRetry<ListCustomersResponse>("/api/v1/customers");
   }
 
   async getCustomer(customerId: string): Promise<Customer> {
-    return this.request<Customer>(`/api/v1/customers/${customerId}`);
+    return this.requestWithRetry<Customer>(`/api/v1/customers/${customerId}`);
   }
 
   async createCustomer(data: CreateCustomerRequest): Promise<Customer> {
-    return this.request<Customer>("/api/v1/customer", {
+    return this.requestWithRetry<Customer>("/api/v1/customer", {
       method: "POST",
       body: JSON.stringify(data),
       headers: {
@@ -410,14 +541,14 @@ export class StablesApiClient {
   }
 
   async updateCustomer(customerId: string, data: Record<string, unknown>): Promise<Customer> {
-    return this.request<Customer>(`/api/v1/customer/${customerId}`, {
+    return this.requestWithRetry<Customer>(`/api/v1/customer/${customerId}`, {
       method: "PATCH",
       body: JSON.stringify(data),
     });
   }
 
   async updateMetadata(customerId: string, metadata: Record<string, string>): Promise<void> {
-    await this.request<Record<string, never>>(`/api/v1/customers/${customerId}/metadata`, {
+    await this.requestWithRetry<Record<string, never>>(`/api/v1/customers/${customerId}/metadata`, {
       method: "PUT",
       body: JSON.stringify({ metadata }),
       headers: {
@@ -430,7 +561,7 @@ export class StablesApiClient {
     customerId: string,
     options?: GenerateVerificationLinkRequest
   ): Promise<GenerateVerificationLinkResponse> {
-    return this.request<GenerateVerificationLinkResponse>(
+    return this.requestWithRetry<GenerateVerificationLinkResponse>(
       `/api/v1/customer/${customerId}/verification/link`,
       {
         method: "POST",
@@ -453,7 +584,7 @@ export class StablesApiClient {
     if (params?.limit) searchParams.set("limit", params.limit.toString());
 
     const query = searchParams.toString();
-    return this.request<ListVirtualAccountsResponse>(
+    return this.requestWithRetry<ListVirtualAccountsResponse>(
       `/api/v1/virtual-accounts${query ? `?${query}` : ""}`
     );
   }
@@ -467,7 +598,7 @@ export class StablesApiClient {
     if (params?.limit) searchParams.set("limit", params.limit.toString());
 
     const query = searchParams.toString();
-    return this.request<ListVirtualAccountsResponse>(
+    return this.requestWithRetry<ListVirtualAccountsResponse>(
       `/api/v1/customers/${customerId}/virtual-accounts${query ? `?${query}` : ""}`
     );
   }
@@ -476,7 +607,7 @@ export class StablesApiClient {
     customerId: string,
     data: CreateVirtualAccountRequest
   ): Promise<VirtualAccount> {
-    return this.request<VirtualAccount>(
+    return this.requestWithRetry<VirtualAccount>(
       `/api/v1/customers/${customerId}/virtual-accounts`,
       {
         method: "POST",
@@ -493,7 +624,7 @@ export class StablesApiClient {
     virtualAccountId: string,
     data: { deposit_handling_mode?: DepositHandlingMode }
   ): Promise<VirtualAccount> {
-    return this.request<VirtualAccount>(
+    return this.requestWithRetry<VirtualAccount>(
       `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}`,
       {
         method: "PATCH",
@@ -506,7 +637,7 @@ export class StablesApiClient {
     customerId: string,
     virtualAccountId: string
   ): Promise<VirtualAccount> {
-    return this.request<VirtualAccount>(
+    return this.requestWithRetry<VirtualAccount>(
       `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/deactivate`,
       {
         method: "POST",
@@ -521,7 +652,7 @@ export class StablesApiClient {
     customerId: string,
     virtualAccountId: string
   ): Promise<VirtualAccount> {
-    return this.request<VirtualAccount>(
+    return this.requestWithRetry<VirtualAccount>(
       `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/reactivate`,
       {
         method: "POST",
@@ -535,14 +666,21 @@ export class StablesApiClient {
   async getVirtualAccountHistory(
     customerId: string,
     virtualAccountId: string,
-    params?: { limit?: number; event_type?: string }
+    params?: {
+      limit?: number;
+      depositId?: string;
+      startingAfter?: string;
+      endingBefore?: string;
+    }
   ): Promise<{ count: number; data: VirtualAccountHistoryEvent[] }> {
     const searchParams = new URLSearchParams();
     if (params?.limit) searchParams.set("limit", params.limit.toString());
-    if (params?.event_type) searchParams.set("event_type", params.event_type);
+    if (params?.depositId) searchParams.set("deposit_id", params.depositId);
+    if (params?.startingAfter) searchParams.set("starting_after", params.startingAfter);
+    if (params?.endingBefore) searchParams.set("ending_before", params.endingBefore);
 
     const query = searchParams.toString();
-    return this.request<{ count: number; data: VirtualAccountHistoryEvent[] }>(
+    return this.requestWithRetry<{ count: number; data: VirtualAccountHistoryEvent[] }>(
       `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/history${query ? `?${query}` : ""}`
     );
   }
@@ -564,17 +702,17 @@ export class StablesApiClient {
     if (params?.pageToken) searchParams.set("pageToken", params.pageToken);
 
     const query = searchParams.toString();
-    return this.request<ListTransfersResponse>(
+    return this.requestWithRetry<ListTransfersResponse>(
       `/api/v1/transfers${query ? `?${query}` : ""}`
     );
   }
 
   async getTransfer(transferId: string): Promise<Transfer> {
-    return this.request<Transfer>(`/api/v1/transfers/${transferId}`);
+    return this.requestWithRetry<Transfer>(`/api/v1/transfers/${transferId}`);
   }
 
   async createTransfer(data: CreateTransferRequest): Promise<Transfer> {
-    return this.request<Transfer>("/api/v1/transfer", {
+    return this.requestWithRetry<Transfer>("/api/v1/transfer", {
       method: "POST",
       body: JSON.stringify(data),
       headers: {
@@ -586,7 +724,7 @@ export class StablesApiClient {
   // ============ QUOTES ============
 
   async createQuote(data: CreateQuoteRequest): Promise<CreateQuoteResponse> {
-    return this.request<CreateQuoteResponse>("/api/v1/quotes", {
+    return this.requestWithRetry<CreateQuoteResponse>("/api/v1/quotes", {
       method: "POST",
       body: JSON.stringify(data),
       headers: {
@@ -596,7 +734,7 @@ export class StablesApiClient {
   }
 
   async getQuote(quoteId: string): Promise<{ quote: Quote }> {
-    return this.request<{ quote: Quote }>(`/api/v1/quotes/${quoteId}`);
+    return this.requestWithRetry<{ quote: Quote }>(`/api/v1/quotes/${quoteId}`);
   }
 
   // ============ API KEYS ============
@@ -607,13 +745,13 @@ export class StablesApiClient {
     if (params?.pageToken) searchParams.set("pageToken", params.pageToken);
 
     const query = searchParams.toString();
-    return this.request<{ apiKeys: ApiKey[] }>(
+    return this.requestWithRetry<{ apiKeys: ApiKey[] }>(
       `/api/v1/api-keys${query ? `?${query}` : ""}`
     );
   }
 
   async createApiKey(data: CreateApiKeyRequest): Promise<CreateApiKeyResponse> {
-    return this.request<CreateApiKeyResponse>("/api/v1/api-keys", {
+    return this.requestWithRetry<CreateApiKeyResponse>("/api/v1/api-keys", {
       method: "POST",
       body: JSON.stringify(data),
       headers: {
@@ -623,11 +761,11 @@ export class StablesApiClient {
   }
 
   async getApiKey(apiKeyId: string): Promise<{ apiKey: ApiKey }> {
-    return this.request<{ apiKey: ApiKey }>(`/api/v1/api-keys/${apiKeyId}`);
+    return this.requestWithRetry<{ apiKey: ApiKey }>(`/api/v1/api-keys/${apiKeyId}`);
   }
 
   async revokeApiKey(apiKeyId: string): Promise<Record<string, never>> {
-    return this.request<Record<string, never>>(`/api/v1/api-keys/${apiKeyId}`, {
+    return this.requestWithRetry<Record<string, never>>(`/api/v1/api-keys/${apiKeyId}`, {
       method: "DELETE",
       headers: {
         "idempotency-key": this.generateIdempotencyKey(),
@@ -638,11 +776,11 @@ export class StablesApiClient {
   // ============ WEBHOOKS ============
 
   async listWebhooks(): Promise<{ subscriptions: WebhookSubscription[] }> {
-    return this.request<{ subscriptions: WebhookSubscription[] }>("/api/v1/webhooks");
+    return this.requestWithRetry<{ subscriptions: WebhookSubscription[] }>("/api/v1/webhooks");
   }
 
   async createWebhook(data: CreateWebhookRequest): Promise<{ subscription: WebhookSubscription }> {
-    return this.request<{ subscription: WebhookSubscription }>("/api/v1/webhooks", {
+    return this.requestWithRetry<{ subscription: WebhookSubscription }>("/api/v1/webhooks", {
       method: "POST",
       body: JSON.stringify(data),
       headers: {
@@ -652,7 +790,7 @@ export class StablesApiClient {
   }
 
   async deleteWebhook(subscriptionId: string): Promise<Record<string, never>> {
-    return this.request<Record<string, never>>(
+    return this.requestWithRetry<Record<string, never>>(
       `/api/v1/webhooks/${subscriptionId}`,
       {
         method: "DELETE",
@@ -671,6 +809,10 @@ export function createStablesClient(): StablesApiClient {
 
   if (!apiKey) {
     throw new Error("STABLES_API_KEY environment variable is required");
+  }
+
+  if (!baseUrl.startsWith("https://")) {
+    throw new Error("STABLES_API_URL must use HTTPS");
   }
 
   return new StablesApiClient(apiKey, baseUrl);

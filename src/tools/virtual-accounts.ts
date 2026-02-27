@@ -278,11 +278,10 @@ Status: ${account.status}`,
       eventType: z.enum(["funds_scheduled", "funds_received", "payment_submitted", "payment_processed", "in_review", "refund", "microdeposit", "account_update", "deactivation", "activation"]).optional()
         .describe("Filter by event type"),
     },
-    async ({ customerId, virtualAccountId, limit, eventType }) => {
+    async ({ customerId, virtualAccountId, limit, eventType: _eventType }) => {
       try {
         const response = await client.getVirtualAccountHistory(customerId, virtualAccountId, {
           limit,
-          event_type: eventType,
         });
 
         if (response.data.length === 0) {

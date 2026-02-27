@@ -33,10 +33,12 @@ import { registerTransferTools } from "./tools/transfers.js";
 import { registerVirtualAccountTools } from "./tools/virtual-accounts.js";
 import { registerApiKeyTools } from "./tools/api-keys.js";
 import { registerWebhookTools } from "./tools/webhooks.js";
+import { registerNotificationTools } from "./tools/notifications.js";
 
 // Validate environment
 const apiKey = process.env.STABLES_API_KEY;
 if (!apiKey) {
+  // eslint-disable-next-line no-console
   console.error("Error: STABLES_API_KEY environment variable is required");
   process.exit(1);
 }
@@ -44,7 +46,7 @@ if (!apiKey) {
 // Create the MCP server
 const server = new McpServer({
   name: "stables-mcp-server",
-  version: "1.0.0",
+  version: "1.2.0",
   description: "Stables fiat-to-crypto API for AI agents - manage customers, quotes, transfers, and virtual accounts",
 });
 
@@ -58,6 +60,7 @@ registerTransferTools(server, stablesClient);
 registerVirtualAccountTools(server, stablesClient);
 registerApiKeyTools(server, stablesClient);
 registerWebhookTools(server, stablesClient);
+registerNotificationTools(server, stablesClient);
 
 // Start the server with STDIO transport
 async function main() {
@@ -66,6 +69,7 @@ async function main() {
 }
 
 main().catch((error) => {
+  // eslint-disable-next-line no-console
   console.error("Failed to start server:", error);
   process.exit(1);
 });
