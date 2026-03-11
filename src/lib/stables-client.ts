@@ -1,6 +1,6 @@
 /**
  * Stables API Client for MCP Server
- * Synced with OpenAPI spec from https://api.sandbox.stables.money/docs
+ * Synced with OpenAPI spec from https://api.stables.money/docs
  */
 
 // ============ CUSTOM ERROR ============
@@ -153,8 +153,12 @@ export interface GenerateVerificationLinkResponse {
 export type TransferType = "TRANSFER_TYPE_OFFRAMP" | "TRANSFER_TYPE_ONRAMP";
 
 export type TransferStatus =
-  | "PENDING"
-  | "IN_PROGRESS"
+  | "CREATED"
+  | "COMPLIANCE_HOLD"
+  | "AWAITING_FUNDS_COLLECTION"
+  | "FUNDS_COLLECTED"
+  | "PAYMENT_SUBMITTED"
+  | "PAYMENT_PROCESSED"
   | "COMPLETED"
   | "FAILED"
   | "CANCELLED"
@@ -297,7 +301,7 @@ export interface VirtualAccountHistoryEvent {
 
 export type QuoteStatus = "QUOTE_STATUS_ACTIVE" | "QUOTE_STATUS_EXPIRED" | "QUOTE_STATUS_USED" | "QUOTE_STATUS_CANCELLED";
 export type PaymentMethodType = "SWIFT" | "LOCAL";
-export type QuoteNetwork = "ethereum" | "polygon" | "polygon-amoy";
+export type QuoteNetwork = "ethereum" | "polygon";
 
 export interface CurrencyAmount {
   currency: string;
@@ -535,9 +539,7 @@ export class StablesApiClient {
     return this.requestWithRetry<Customer>("/api/v1/customer", {
       method: "POST",
       body: JSON.stringify(data),
-      headers: {
-        "idempotency-key": this.generateIdempotencyKey(),
-      },
+      headers: { "idempotency-key": this.generateIdempotencyKey() },
     });
   }
 
@@ -545,6 +547,7 @@ export class StablesApiClient {
     return this.requestWithRetry<Customer>(`/api/v1/customer/${customerId}`, {
       method: "PATCH",
       body: JSON.stringify(data),
+      headers: { "idempotency-key": this.generateIdempotencyKey() },
     });
   }
 
@@ -552,9 +555,7 @@ export class StablesApiClient {
     await this.requestWithRetry<Record<string, never>>(`/api/v1/customers/${customerId}/metadata`, {
       method: "PUT",
       body: JSON.stringify({ metadata }),
-      headers: {
-        "idempotency-key": this.generateIdempotencyKey(),
-      },
+      headers: { "idempotency-key": this.generateIdempotencyKey() },
     });
   }
 
@@ -567,9 +568,7 @@ export class StablesApiClient {
       {
         method: "POST",
         body: JSON.stringify(options || {}),
-        headers: {
-          "idempotency-key": this.generateIdempotencyKey(),
-        },
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
       }
     );
   }
@@ -613,9 +612,7 @@ export class StablesApiClient {
       {
         method: "POST",
         body: JSON.stringify(data),
-        headers: {
-          "idempotency-key": this.generateIdempotencyKey(),
-        },
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
       }
     );
   }
@@ -642,9 +639,7 @@ export class StablesApiClient {
       `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/deactivate`,
       {
         method: "POST",
-        headers: {
-          "idempotency-key": this.generateIdempotencyKey(),
-        },
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
       }
     );
   }
@@ -657,9 +652,7 @@ export class StablesApiClient {
       `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/reactivate`,
       {
         method: "POST",
-        headers: {
-          "idempotency-key": this.generateIdempotencyKey(),
-        },
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
       }
     );
   }
@@ -716,9 +709,7 @@ export class StablesApiClient {
     return this.requestWithRetry<Transfer>("/api/v1/transfer", {
       method: "POST",
       body: JSON.stringify(data),
-      headers: {
-        "idempotency-key": this.generateIdempotencyKey(),
-      },
+      headers: { "idempotency-key": this.generateIdempotencyKey() },
     });
   }
 
@@ -728,9 +719,7 @@ export class StablesApiClient {
     return this.requestWithRetry<CreateQuoteResponse>("/api/v1/quotes", {
       method: "POST",
       body: JSON.stringify(data),
-      headers: {
-        "idempotency-key": this.generateIdempotencyKey(),
-      },
+      headers: { "idempotency-key": this.generateIdempotencyKey() },
     });
   }
 
@@ -755,9 +744,7 @@ export class StablesApiClient {
     return this.requestWithRetry<CreateApiKeyResponse>("/api/v1/api-keys", {
       method: "POST",
       body: JSON.stringify(data),
-      headers: {
-        "idempotency-key": this.generateIdempotencyKey(),
-      },
+      headers: { "idempotency-key": this.generateIdempotencyKey() },
     });
   }
 
@@ -768,9 +755,7 @@ export class StablesApiClient {
   async revokeApiKey(apiKeyId: string): Promise<Record<string, never>> {
     return this.requestWithRetry<Record<string, never>>(`/api/v1/api-keys/${apiKeyId}`, {
       method: "DELETE",
-      headers: {
-        "idempotency-key": this.generateIdempotencyKey(),
-      },
+      headers: { "idempotency-key": this.generateIdempotencyKey() },
     });
   }
 
@@ -784,9 +769,7 @@ export class StablesApiClient {
     return this.requestWithRetry<{ subscription: WebhookSubscription }>("/api/v1/webhooks", {
       method: "POST",
       body: JSON.stringify(data),
-      headers: {
-        "idempotency-key": this.generateIdempotencyKey(),
-      },
+      headers: { "idempotency-key": this.generateIdempotencyKey() },
     });
   }
 
@@ -795,9 +778,7 @@ export class StablesApiClient {
       `/api/v1/webhooks/${subscriptionId}`,
       {
         method: "DELETE",
-        headers: {
-          "idempotency-key": this.generateIdempotencyKey(),
-        },
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
       }
     );
   }
@@ -806,7 +787,7 @@ export class StablesApiClient {
 // Create client from environment variables
 export function createStablesClient(): StablesApiClient {
   const apiKey = process.env.STABLES_API_KEY;
-  const baseUrl = process.env.STABLES_API_URL || "https://api.sandbox.stables.money";
+  const baseUrl = process.env.STABLES_API_URL || "https://api.stables.money";
 
   if (!apiKey) {
     throw new Error("STABLES_API_KEY environment variable is required");

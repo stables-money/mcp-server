@@ -1,6 +1,6 @@
 /**
  * Transfer Tools for Stables MCP Server
- * Synced with OpenAPI spec from https://api.sandbox.stables.money/docs
+ * Synced with OpenAPI spec from https://api.stables.money/docs
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -124,11 +124,23 @@ Use 'get_transfer' to check the status.`,
 
         let statusInfo = "";
         switch (transfer.status) {
-          case "PENDING":
-            statusInfo = "Transfer is waiting to be processed.";
+          case "CREATED":
+            statusInfo = "Transfer has been created and is awaiting processing.";
             break;
-          case "IN_PROGRESS":
-            statusInfo = "Transfer is being processed.";
+          case "COMPLIANCE_HOLD":
+            statusInfo = "Transfer is on hold pending compliance review.";
+            break;
+          case "AWAITING_FUNDS_COLLECTION":
+            statusInfo = "Waiting for the customer to send crypto funds.";
+            break;
+          case "FUNDS_COLLECTED":
+            statusInfo = "Crypto funds have been received, payout is being prepared.";
+            break;
+          case "PAYMENT_SUBMITTED":
+            statusInfo = "Bank payment has been submitted for processing.";
+            break;
+          case "PAYMENT_PROCESSED":
+            statusInfo = "Bank payment has been processed successfully.";
             break;
           case "COMPLETED":
             statusInfo = "Transfer completed successfully!";
@@ -194,7 +206,7 @@ ${statusInfo}`,
     "list_transfers",
     "List transfers with optional filters for status, type, or customer",
     {
-      status: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED", "FAILED", "CANCELLED", "EXPIRED"]).optional()
+      status: z.enum(["CREATED", "COMPLIANCE_HOLD", "AWAITING_FUNDS_COLLECTION", "FUNDS_COLLECTED", "PAYMENT_SUBMITTED", "PAYMENT_PROCESSED", "COMPLETED", "FAILED", "CANCELLED", "EXPIRED"]).optional()
         .describe("Filter by transfer status"),
       type: z.enum(["TRANSFER_TYPE_ONRAMP", "TRANSFER_TYPE_OFFRAMP"]).optional()
         .describe("Filter by transfer type"),

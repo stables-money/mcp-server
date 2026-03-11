@@ -1,6 +1,6 @@
 /**
  * Customer Management Tools for Stables MCP Server
- * Synced with OpenAPI spec from https://api.sandbox.stables.money/docs
+ * Synced with OpenAPI spec from https://api.stables.money/docs
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";

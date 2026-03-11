@@ -1,6 +1,6 @@
 /**
  * Webhook Management Tools for Stables MCP Server
- * Synced with OpenAPI spec from https://api.sandbox.stables.money/docs
+ * Synced with OpenAPI spec from https://api.stables.money/docs
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -24,6 +24,8 @@ Available event types:
 - WEBHOOK_EVENT_TYPE_VA_DEPOSIT_RECEIVED
 - WEBHOOK_EVENT_TYPE_VA_PAYOUT_COMPLETED
 - WEBHOOK_EVENT_TYPE_VA_PAYOUT_FAILED
+- WEBHOOK_EVENT_TYPE_MONOOVA_NPP_RECEIVE_PAYMENT
+- WEBHOOK_EVENT_TYPE_MONOOVA_INBOUND_DIRECT_CREDIT
 - WEBHOOK_EVENT_TYPE_ALL
 
 Security: Set a secret to enable HMAC-SHA256 signature verification via X-Webhook-Signature header.`,

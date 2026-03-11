@@ -1,6 +1,6 @@
 /**
  * Quote Tools for Stables MCP Server
- * Synced with OpenAPI spec from https://api.sandbox.stables.money/docs
+ * Synced with OpenAPI spec from https://api.stables.money/docs
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -16,7 +16,7 @@ export function registerQuoteTools(server: McpServer, client: StablesApiClient) 
       customerId: z.string().optional().describe("The customer ID to associate this quote with. Required if the quote will be used to create a transfer."),
       fromCurrency: z.enum(["USDC", "USDT"]).describe("Source cryptocurrency (USDC or USDT)"),
       fromAmount: z.string().describe("Amount to convert (e.g., '125.75')"),
-      fromNetwork: z.enum(["ethereum", "polygon", "polygon-amoy"]).describe("Blockchain network for the source crypto"),
+      fromNetwork: z.enum(["ethereum", "polygon"]).describe("Blockchain network for the source crypto"),
       toCurrency: z.string().describe("Destination currency code (e.g., 'EUR', 'USD', 'GBP')"),
       toCountry: z.string().describe("Destination country code (e.g., 'GR', 'US', 'GB')"),
       paymentMethodType: z.enum(["SWIFT", "LOCAL"]).describe("Payment method for fiat payouts - 'SWIFT' for international, 'LOCAL' for domestic rails"),

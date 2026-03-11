@@ -17,7 +17,7 @@
  *         "args": ["/path/to/stables-mcp-server/build/index.js"],
  *         "env": {
  *           "STABLES_API_KEY": "your-api-key",
- *           "STABLES_API_URL": "https://api.sandbox.stables.money"
+ *           "STABLES_API_URL": "https://api.stables.money"
  *         }
  *       }
  *     }
