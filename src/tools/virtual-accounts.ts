@@ -11,41 +11,30 @@ export function registerVirtualAccountTools(server: McpServer, client: StablesAp
   // Create Virtual Account
   server.tool(
     "create_virtual_account",
-    "Create a virtual bank account for a customer to receive fiat deposits. Deposits can automatically convert to crypto and payout to a wallet.",
+    "Create a virtual bank account for a customer to receive fiat deposits. Deposits convert to the specified stablecoin and payout to the provided wallet. Deposit-handling mode is set server-side and can later be changed via update_virtual_account.",
     {
       customerId: z.string().describe("The customer ID to create the virtual account for"),
-      sourceCurrency: z.string().describe("Currency for the virtual account (e.g., 'USD', 'EUR', 'GBP')"),
-      depositHandlingMode: z.enum(["auto_payout", "hold", "manual"]).optional()
-        .describe("How to handle deposits: 'auto_payout' converts and sends to wallet, 'hold' keeps as fiat, 'manual' requires approval"),
-      destinationAddress: z.string().optional().describe("Crypto wallet address for payouts"),
-      destinationPaymentRail: z.enum(["arbitrum", "avalanche_c_chain", "base", "celo", "ethereum", "optimism", "polygon", "solana", "stellar", "tron"]).optional()
+      sourceCurrency: z.string().describe("Currency for the virtual account (e.g., 'USD', 'EUR', 'GBP', 'AUD')"),
+      destinationAddress: z.string().describe("Crypto wallet address for payouts"),
+      destinationPaymentRail: z.enum(["arbitrum", "avalanche_c_chain", "base", "celo", "ethereum", "optimism", "polygon", "solana", "stellar", "tron"])
         .describe("Blockchain network for the destination wallet"),
       destinationCurrency: z.enum(["usdc", "usdt", "dai", "pyusd", "eurc"]).optional()
         .describe("Stablecoin to receive (default: usdc)"),
+      destinationMemo: z.string().optional().describe("Memo/tag for the destination (required on some chains like Stellar)"),
+      developerFeePercent: z.string().optional().describe("Developer fee percent as decimal string (e.g. '0.5')"),
     },
-    async ({ customerId, sourceCurrency, depositHandlingMode, destinationAddress, destinationPaymentRail, destinationCurrency }) => {
+    async ({ customerId, sourceCurrency, destinationAddress, destinationPaymentRail, destinationCurrency, destinationMemo, developerFeePercent }) => {
       try {
-        const request: {
-          source: { currency: string };
-          deposit_handling_mode?: "auto_payout" | "hold" | "manual";
-          destination?: {
-            currency: "usdc" | "usdt" | "dai" | "pyusd" | "eurc";
-            payment_rail: "arbitrum" | "avalanche_c_chain" | "base" | "celo" | "ethereum" | "optimism" | "polygon" | "solana" | "stellar" | "tron";
-            address: string;
-          };
-        } = {
+        const request = {
           source: { currency: sourceCurrency },
-          deposit_handling_mode: depositHandlingMode,
-        };
-
-        // Add destination if all required fields provided
-        if (destinationAddress && destinationPaymentRail) {
-          request.destination = {
+          destination: {
             currency: destinationCurrency || "usdc",
             payment_rail: destinationPaymentRail,
             address: destinationAddress,
-          };
-        }
+            ...(destinationMemo ? { memo: destinationMemo } : {}),
+          },
+          ...(developerFeePercent ? { developer_fee_percent: developerFeePercent } : {}),
+        } as const;
 
         const account = await client.createVirtualAccount(customerId, request);
 
@@ -316,6 +305,200 @@ ${eventList}`,
               type: "text",
               text: `Failed to get virtual account history: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Set / Replace Virtual Account Destination
+  server.tool(
+    "set_virtual_account_destination",
+    "Create or replace the active payout destination (crypto wallet) for a virtual account. Use this to change where deposits auto-payout to without re-creating the account.",
+    {
+      customerId: z.string().describe("The customer ID"),
+      virtualAccountId: z.string().describe("The virtual account ID"),
+      address: z.string().describe("Crypto wallet address for payouts"),
+      paymentRail: z.enum(["arbitrum", "avalanche_c_chain", "base", "celo", "ethereum", "optimism", "polygon", "solana", "stellar", "tron"])
+        .describe("Blockchain network for the destination wallet"),
+      currency: z.enum(["usdc", "usdt", "dai", "pyusd", "eurc"]).describe("Stablecoin to receive"),
+      memo: z.string().optional().describe("Memo/tag for the destination (required on some chains like Stellar)"),
+    },
+    async ({ customerId, virtualAccountId, address, paymentRail, currency, memo }) => {
+      try {
+        const account = await client.setVirtualAccountDestination(customerId, virtualAccountId, {
+          currency,
+          payment_rail: paymentRail,
+          address,
+          ...(memo ? { memo } : {}),
+        });
+        const dest = account.destination;
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Destination updated for virtual account ${account.id}.
+Address: ${dest?.address}
+Payment Rail: ${dest?.payment_rail}
+Currency: ${dest?.currency}${dest?.memo ? `\nMemo: ${dest.memo}` : ""}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            { type: "text", text: `Failed to set destination: ${error instanceof Error ? error.message : "Unknown error"}` },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Register PayID (AUD virtual accounts)
+  server.tool(
+    "register_payid",
+    "Register a PayID for an activated AUD virtual account. If pay_id is omitted, the provider assigns one.",
+    {
+      customerId: z.string().describe("The customer ID"),
+      virtualAccountId: z.string().describe("The AUD virtual account ID"),
+      payId: z.string().max(256).optional().describe("Optional PayID string; omit to let provider auto-assign"),
+    },
+    async ({ customerId, virtualAccountId, payId }) => {
+      try {
+        const res = await client.registerPayId(
+          customerId,
+          virtualAccountId,
+          payId ? { pay_id: payId } : undefined
+        );
+        const lines = [
+          `PayID: ${res.pay_id}`,
+          res.already_registered !== undefined ? `Already registered: ${res.already_registered}` : null,
+          res.status ? `Status: ${res.status}` : null,
+          res.status_description ? `Status detail: ${res.status_description}` : null,
+          res.pay_id_name ? `PayID name: ${res.pay_id_name}` : null,
+          res.pay_id_status ? `PayID status: ${res.pay_id_status}` : null,
+        ].filter(Boolean);
+        return {
+          content: [{ type: "text", text: lines.join("\n") }],
+        };
+      } catch (error) {
+        return {
+          content: [
+            { type: "text", text: `Failed to register PayID: ${error instanceof Error ? error.message : "Unknown error"}` },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // List whitelisted source accounts (AUD)
+  server.tool(
+    "list_whitelist_accounts",
+    "List whitelisted source accounts for an AUD virtual account. Only deposits from whitelisted BSB/account pairs will be accepted.",
+    {
+      customerId: z.string().describe("The customer ID"),
+      virtualAccountId: z.string().describe("The AUD virtual account ID"),
+    },
+    async ({ customerId, virtualAccountId }) => {
+      try {
+        const res = await client.listWhitelistAccounts(customerId, virtualAccountId);
+        if (res.data.length === 0) {
+          return { content: [{ type: "text", text: `No whitelisted source accounts found.` }] };
+        }
+        const list = res.data
+          .map((a) => `- id=${a.id} ${a.account_name || "(no name)"} BSB ${a.bsb_number} Acct ${a.account_number} [${a.account_status}]`)
+          .join("\n");
+        return {
+          content: [{ type: "text", text: `Whitelisted source accounts (${res.count}):\n${list}` }],
+        };
+      } catch (error) {
+        return {
+          content: [
+            { type: "text", text: `Failed to list whitelist: ${error instanceof Error ? error.message : "Unknown error"}` },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Create whitelisted source account (AUD)
+  server.tool(
+    "create_whitelist_account",
+    "Add a whitelisted source bank account (BSB + account number) to an AUD virtual account.",
+    {
+      customerId: z.string().describe("The customer ID"),
+      virtualAccountId: z.string().describe("The AUD virtual account ID"),
+      accountNumber: z.string().min(1).describe("Source bank account number"),
+      bsbNumber: z.string().min(1).describe("Source bank BSB number"),
+      accountName: z.string().optional().describe("Optional account holder name"),
+      accountStatus: z.enum(["enabled", "disabled"]).optional().describe("Initial status (default: enabled)"),
+    },
+    async ({ customerId, virtualAccountId, accountNumber, bsbNumber, accountName, accountStatus }) => {
+      try {
+        const res = await client.createWhitelistAccount(customerId, virtualAccountId, {
+          source_account: {
+            account_number: accountNumber,
+            bsb_number: bsbNumber,
+            ...(accountName ? { account_name: accountName } : {}),
+            ...(accountStatus ? { account_status: accountStatus } : {}),
+          },
+        });
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Whitelisted source account created. id=${res.id} BSB ${res.bsb_number} Acct ${res.account_number} [${res.account_status}]`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            { type: "text", text: `Failed to create whitelist entry: ${error instanceof Error ? error.message : "Unknown error"}` },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Update whitelisted source account (AUD)
+  server.tool(
+    "update_whitelist_account",
+    "Update a whitelisted source account on an AUD virtual account (change BSB/account number, name, or enabled/disabled status).",
+    {
+      customerId: z.string().describe("The customer ID"),
+      virtualAccountId: z.string().describe("The AUD virtual account ID"),
+      sourceAccountId: z.union([z.number(), z.string()]).describe("The whitelist entry ID"),
+      accountNumber: z.string().min(1).describe("Source bank account number"),
+      bsbNumber: z.string().min(1).describe("Source bank BSB number"),
+      accountStatus: z.enum(["enabled", "disabled"]).describe("Enabled or disabled"),
+      accountName: z.string().optional().describe("Optional account holder name"),
+    },
+    async ({ customerId, virtualAccountId, sourceAccountId, accountNumber, bsbNumber, accountStatus, accountName }) => {
+      try {
+        const res = await client.updateWhitelistAccount(customerId, virtualAccountId, sourceAccountId, {
+          account_number: accountNumber,
+          bsb_number: bsbNumber,
+          account_status: accountStatus,
+          ...(accountName !== undefined ? { account_name: accountName } : {}),
+        });
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Whitelist entry ${res.id} updated. BSB ${res.bsb_number} Acct ${res.account_number} [${res.account_status}]`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            { type: "text", text: `Failed to update whitelist entry: ${error instanceof Error ? error.message : "Unknown error"}` },
           ],
           isError: true,
         };
