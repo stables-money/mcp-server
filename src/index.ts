@@ -46,7 +46,7 @@ if (!apiKey) {
 // Create the MCP server
 const server = new McpServer({
   name: "stables-mcp-server",
-  version: "1.2.0",
+  version: "1.5.0",
   description: "Stables fiat-to-crypto API for AI agents - manage customers, quotes, transfers, and virtual accounts",
 });
 

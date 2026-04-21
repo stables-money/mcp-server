@@ -276,9 +276,60 @@ export interface VirtualAccount {
 
 export interface CreateVirtualAccountRequest {
   source: { currency: string };
-  deposit_handling_mode?: DepositHandlingMode;
-  destination?: VirtualAccountDestination;
+  destination: VirtualAccountDestination;
+  developer_fee_percent?: string;
   metadata?: Record<string, string>;
+}
+
+export interface SetVirtualAccountDestinationRequest {
+  currency: Stablecoin;
+  payment_rail: PaymentRail;
+  address: string;
+  memo?: string;
+}
+
+export interface RegisterPayIdRequest {
+  pay_id?: string;
+}
+
+export interface RegisterPayIdResponse {
+  pay_id: string;
+  already_registered?: boolean;
+  status?: string;
+  status_description?: string;
+  pay_id_name?: string;
+  pay_id_status?: string;
+}
+
+export type WhitelistAccountStatus = "enabled" | "disabled";
+
+export interface WhitelistAccount {
+  id: number;
+  account_name?: string | null;
+  account_number: string;
+  bsb_number: string;
+  account_status: WhitelistAccountStatus;
+}
+
+export interface CreateWhitelistAccountRequest {
+  source_account: {
+    account_name?: string | null;
+    account_number: string;
+    bsb_number: string;
+    account_status?: WhitelistAccountStatus;
+  };
+}
+
+export interface UpdateWhitelistAccountRequest {
+  account_name?: string | null;
+  account_number: string;
+  bsb_number: string;
+  account_status: WhitelistAccountStatus;
+}
+
+export interface ListWhitelistAccountsResponse {
+  count: number;
+  data: WhitelistAccount[];
 }
 
 export interface ListVirtualAccountsResponse {
@@ -573,6 +624,19 @@ export class StablesApiClient {
     );
   }
 
+  async createCustomerWithVerificationLink(
+    data: CreateCustomerRequest & GenerateVerificationLinkRequest
+  ): Promise<GenerateVerificationLinkResponse> {
+    return this.requestWithRetry<GenerateVerificationLinkResponse>(
+      "/api/v1/customer/verification/link",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
+      }
+    );
+  }
+
   // ============ VIRTUAL ACCOUNTS ============
 
   async listAllVirtualAccounts(params?: {
@@ -652,6 +716,76 @@ export class StablesApiClient {
       `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/reactivate`,
       {
         method: "POST",
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
+      }
+    );
+  }
+
+  async setVirtualAccountDestination(
+    customerId: string,
+    virtualAccountId: string,
+    data: SetVirtualAccountDestinationRequest
+  ): Promise<VirtualAccount> {
+    return this.requestWithRetry<VirtualAccount>(
+      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/destination`,
+      {
+        method: "PUT",
+        body: JSON.stringify(data),
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
+      }
+    );
+  }
+
+  async registerPayId(
+    customerId: string,
+    virtualAccountId: string,
+    data?: RegisterPayIdRequest
+  ): Promise<RegisterPayIdResponse> {
+    return this.requestWithRetry<RegisterPayIdResponse>(
+      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/payid`,
+      {
+        method: "POST",
+        body: JSON.stringify(data || {}),
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
+      }
+    );
+  }
+
+  async listWhitelistAccounts(
+    customerId: string,
+    virtualAccountId: string
+  ): Promise<ListWhitelistAccountsResponse> {
+    return this.requestWithRetry<ListWhitelistAccountsResponse>(
+      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/whitelist-accounts`
+    );
+  }
+
+  async createWhitelistAccount(
+    customerId: string,
+    virtualAccountId: string,
+    data: CreateWhitelistAccountRequest
+  ): Promise<WhitelistAccount> {
+    return this.requestWithRetry<WhitelistAccount>(
+      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/whitelist-accounts`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
+      }
+    );
+  }
+
+  async updateWhitelistAccount(
+    customerId: string,
+    virtualAccountId: string,
+    sourceAccountId: number | string,
+    data: UpdateWhitelistAccountRequest
+  ): Promise<WhitelistAccount> {
+    return this.requestWithRetry<WhitelistAccount>(
+      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/whitelist-accounts/${sourceAccountId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
         headers: { "idempotency-key": this.generateIdempotencyKey() },
       }
     );

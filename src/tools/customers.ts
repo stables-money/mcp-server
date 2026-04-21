@@ -5,7 +5,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { StablesApiClient, StablesApiError, CreateCustomerRequest } from "../lib/stables-client.js";
+import { StablesApiClient, StablesApiError, CreateCustomerRequest, GenerateVerificationLinkRequest } from "../lib/stables-client.js";
 
 function formatError(error: unknown): string {
   if (error instanceof StablesApiError) {
@@ -281,6 +281,83 @@ ${customerList}`,
               type: "text",
               text: `Failed to list customers: ${formatError(error)}`,
             },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Create Customer + Verification Link (atomic)
+  server.tool(
+    "create_customer_with_verification_link",
+    "Create a customer and generate a KYC verification link in a single call. Returns the verification URL to share with the customer. Use this instead of create_customer + get_verification_link when you need the link immediately.",
+    {
+      email: z.string().email().optional().describe("Customer's email address"),
+      customerType: z.enum(["individual", "business"]).describe("'individual' for personal, 'business' for companies"),
+      firstName: z.string().optional().describe("First name (individuals)"),
+      lastName: z.string().optional().describe("Last name (individuals)"),
+      middleName: z.string().optional().describe("Middle name (individuals)"),
+      companyName: z.string().optional().describe("Company name (businesses)"),
+      phone: z.string().optional().describe("Phone with country code (e.g. '+14155552671')"),
+      externalCustomerId: z.string().optional().describe("Your own reference ID for this customer"),
+      entitlements: z.array(z.enum(["base_payout", "virtual_account"])).optional().describe("Entitlements to request"),
+      ttlInSecs: z.number().optional().describe("Time-to-live for the KYC link in seconds (default: 1800)"),
+      successUrl: z.string().optional().describe("Redirect URL after successful verification"),
+      rejectUrl: z.string().optional().describe("Redirect URL after rejected verification"),
+    },
+    async (params) => {
+      try {
+        const isBusiness = params.customerType === "business";
+        const redirect = (params.successUrl || params.rejectUrl)
+          ? { successUrl: params.successUrl, rejectUrl: params.rejectUrl }
+          : undefined;
+
+        const body: Record<string, unknown> = {
+          customerType: isBusiness ? "CUSTOMER_TYPE_BUSINESS" : "CUSTOMER_TYPE_INDIVIDUAL",
+          externalCustomerId: params.externalCustomerId || crypto.randomUUID(),
+          email: params.email,
+          phone: params.phone,
+          entitlements: params.entitlements,
+          ttlInSecs: params.ttlInSecs,
+          redirect,
+        };
+
+        if (isBusiness) {
+          body.companyName = params.companyName;
+        } else {
+          body.firstName = params.firstName;
+          body.lastName = params.lastName;
+          body.middleName = params.middleName;
+        }
+
+        for (const key of Object.keys(body)) {
+          if (body[key] === undefined) delete body[key];
+        }
+
+        const result = await client.createCustomerWithVerificationLink(
+          body as unknown as CreateCustomerRequest & GenerateVerificationLinkRequest
+        );
+        const ttlDisplay = params.ttlInSecs ? `${Math.floor(params.ttlInSecs / 60)} minutes` : "30 minutes (default)";
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Customer created and verification link generated!
+
+Customer ID: ${result.customerId}
+Verification Link: ${result.kycLink}
+
+The link will expire in ${ttlDisplay}.
+Share this link with the customer to complete their identity verification.`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            { type: "text", text: `Failed to create customer with verification link: ${formatError(error)}` },
           ],
           isError: true,
         };
