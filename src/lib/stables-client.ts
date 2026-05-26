@@ -42,7 +42,11 @@ export interface VerificationLevelResponse {
 
 export interface Entitlement {
   name: string;
-  status: "ENTITLEMENT_STATUS_SUBMITTED" | "ENTITLEMENT_STATUS_IN_PROGRESS" | "ENTITLEMENT_STATUS_APPROVED" | "ENTITLEMENT_STATUS_REJECTED";
+  status:
+    | "ENTITLEMENT_STATUS_SUBMITTED"
+    | "ENTITLEMENT_STATUS_IN_PROGRESS"
+    | "ENTITLEMENT_STATUS_APPROVED"
+    | "ENTITLEMENT_STATUS_REJECTED";
 }
 
 export interface CustomerAddress {
@@ -230,7 +234,17 @@ export interface ListTransfersResponse {
 // ============ VIRTUAL ACCOUNT TYPES ============
 
 export type VirtualAccountStatus = "activated" | "deactivated" | "pending" | "closed";
-export type PaymentRail = "arbitrum" | "avalanche_c_chain" | "base" | "celo" | "ethereum" | "optimism" | "polygon" | "solana" | "stellar" | "tron";
+export type PaymentRail =
+  | "arbitrum"
+  | "avalanche_c_chain"
+  | "base"
+  | "celo"
+  | "ethereum"
+  | "optimism"
+  | "polygon"
+  | "solana"
+  | "stellar"
+  | "tron";
 export type Stablecoin = "usdc" | "usdt" | "dai" | "pyusd" | "eurc";
 export type DepositHandlingMode = "auto_payout" | "hold" | "manual";
 
@@ -299,7 +313,11 @@ export interface VirtualAccountHistoryEvent {
 
 // ============ QUOTE TYPES ============
 
-export type QuoteStatus = "QUOTE_STATUS_ACTIVE" | "QUOTE_STATUS_EXPIRED" | "QUOTE_STATUS_USED" | "QUOTE_STATUS_CANCELLED";
+export type QuoteStatus =
+  | "QUOTE_STATUS_ACTIVE"
+  | "QUOTE_STATUS_EXPIRED"
+  | "QUOTE_STATUS_USED"
+  | "QUOTE_STATUS_CANCELLED";
 export type PaymentMethodType = "SWIFT" | "LOCAL";
 export type QuoteNetwork = "ethereum" | "polygon";
 
@@ -415,15 +433,12 @@ export class StablesApiClient {
     this.baseUrl = baseUrl;
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.apiKey}`,
-      ...options.headers as Record<string, string>,
+      ...(options.headers as Record<string, string>),
     };
 
     if (options.body) {
@@ -491,10 +506,7 @@ export class StablesApiClient {
     }
   }
 
-  private async requestWithRetry<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
+  private async requestWithRetry<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -505,7 +517,11 @@ export class StablesApiClient {
 
         // Don't retry client errors (except 429 rate limits)
         if (error instanceof StablesApiError) {
-          if (error.statusCode >= 400 && error.statusCode < 500 && !RETRYABLE_STATUS_CODES.has(error.statusCode)) {
+          if (
+            error.statusCode >= 400 &&
+            error.statusCode < 500 &&
+            !RETRYABLE_STATUS_CODES.has(error.statusCode)
+          ) {
             throw error;
           }
         }
@@ -513,7 +529,7 @@ export class StablesApiClient {
         if (attempt < MAX_RETRIES) {
           const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
           const jitter = Math.random() * 500;
-          await new Promise(resolve => setTimeout(resolve, delay + jitter));
+          await new Promise((resolve) => setTimeout(resolve, delay + jitter));
         }
       }
     }
@@ -729,7 +745,10 @@ export class StablesApiClient {
 
   // ============ API KEYS ============
 
-  async listApiKeys(params?: { pageSize?: number; pageToken?: string }): Promise<{ apiKeys: ApiKey[] }> {
+  async listApiKeys(params?: {
+    pageSize?: number;
+    pageToken?: string;
+  }): Promise<{ apiKeys: ApiKey[] }> {
     const searchParams = new URLSearchParams();
     if (params?.pageSize) searchParams.set("pageSize", params.pageSize.toString());
     if (params?.pageToken) searchParams.set("pageToken", params.pageToken);
@@ -774,13 +793,10 @@ export class StablesApiClient {
   }
 
   async deleteWebhook(subscriptionId: string): Promise<Record<string, never>> {
-    return this.requestWithRetry<Record<string, never>>(
-      `/api/v1/webhooks/${subscriptionId}`,
-      {
-        method: "DELETE",
-        headers: { "idempotency-key": this.generateIdempotencyKey() },
-      }
-    );
+    return this.requestWithRetry<Record<string, never>>(`/api/v1/webhooks/${subscriptionId}`, {
+      method: "DELETE",
+      headers: { "idempotency-key": this.generateIdempotencyKey() },
+    });
   }
 }
 

@@ -12,7 +12,9 @@ export function registerApiKeyTools(server: McpServer, client: StablesApiClient)
     "create_api_key",
     "Create a new API key for accessing the Stables API. The secret key is only shown once on creation - save it immediately.",
     {
-      name: z.string().describe("A descriptive name for this API key (e.g., 'Production Bot', 'Agent Smith')"),
+      name: z
+        .string()
+        .describe("A descriptive name for this API key (e.g., 'Production Bot', 'Agent Smith')"),
       metadata: z.record(z.string()).optional().describe("Optional metadata to attach to the key"),
     },
     async ({ name, metadata }) => {
@@ -76,10 +78,12 @@ IMPORTANT: Save the secret key now! It will not be shown again.`,
           };
         }
 
-        const keyList = response.apiKeys.map((k) => {
-          const status = k.active ? "Active" : "Revoked";
-          return `- ${k.apiKeyId}: "${k.name}" (${k.prefix}...) - ${status} - Created: ${k.createdAt}`;
-        }).join("\n");
+        const keyList = response.apiKeys
+          .map((k) => {
+            const status = k.active ? "Active" : "Revoked";
+            return `- ${k.apiKeyId}: "${k.name}" (${k.prefix}...) - ${status} - Created: ${k.createdAt}`;
+          })
+          .join("\n");
 
         return {
           content: [

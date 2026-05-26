@@ -47,7 +47,8 @@ if (!apiKey) {
 const server = new McpServer({
   name: "stables-mcp-server",
   version: "1.2.0",
-  description: "Stables fiat-to-crypto API for AI agents - manage customers, quotes, transfers, and virtual accounts",
+  description:
+    "Stables fiat-to-crypto API for AI agents - manage customers, quotes, transfers, and virtual accounts",
 });
 
 // Create the Stables API client

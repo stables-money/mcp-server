@@ -13,15 +13,34 @@ export function registerQuoteTools(server: McpServer, client: StablesApiClient) 
     "create_quote",
     "Get a quote for currency exchange. Quotes show the exchange rate, fees, and amount the customer will receive. Quotes expire after 30 seconds. Currently supports crypto → fiat (off-ramp) with more types coming soon.",
     {
-      customerId: z.string().optional().describe("The customer ID to associate this quote with. Required if the quote will be used to create a transfer."),
+      customerId: z
+        .string()
+        .optional()
+        .describe(
+          "The customer ID to associate this quote with. Required if the quote will be used to create a transfer."
+        ),
       fromCurrency: z.enum(["USDC", "USDT"]).describe("Source cryptocurrency (USDC or USDT)"),
       fromAmount: z.string().describe("Amount to convert (e.g., '125.75')"),
-      fromNetwork: z.enum(["ethereum", "polygon"]).describe("Blockchain network for the source crypto"),
+      fromNetwork: z
+        .enum(["ethereum", "polygon"])
+        .describe("Blockchain network for the source crypto"),
       toCurrency: z.string().describe("Destination currency code (e.g., 'EUR', 'USD', 'GBP')"),
       toCountry: z.string().describe("Destination country code (e.g., 'GR', 'US', 'GB')"),
-      paymentMethodType: z.enum(["SWIFT", "LOCAL"]).describe("Payment method for fiat payouts - 'SWIFT' for international, 'LOCAL' for domestic rails"),
+      paymentMethodType: z
+        .enum(["SWIFT", "LOCAL"])
+        .describe(
+          "Payment method for fiat payouts - 'SWIFT' for international, 'LOCAL' for domestic rails"
+        ),
     },
-    async ({ customerId, fromCurrency, fromAmount, fromNetwork, toCurrency, toCountry, paymentMethodType }) => {
+    async ({
+      customerId,
+      fromCurrency,
+      fromAmount,
+      fromNetwork,
+      toCurrency,
+      toCountry,
+      paymentMethodType,
+    }) => {
       try {
         const response = await client.createQuote({
           customerId,
@@ -38,14 +57,22 @@ export function registerQuoteTools(server: McpServer, client: StablesApiClient) 
         });
 
         const quote = response.quote;
-        const expiresIn = Math.max(0, Math.floor((new Date(quote.expiresAt).getTime() - Date.now()) / 1000));
+        const expiresIn = Math.max(
+          0,
+          Math.floor((new Date(quote.expiresAt).getTime() - Date.now()) / 1000)
+        );
 
         let feeDetails = `Total Fees: ${quote.fees.totalFee.amount} ${quote.fees.totalFee.currency}`;
-        if (quote.fees.fxFee) feeDetails += `\n  FX Fee: ${quote.fees.fxFee.amount} ${quote.fees.fxFee.currency}`;
-        if (quote.fees.platformFee) feeDetails += `\n  Platform Fee: ${quote.fees.platformFee.amount} ${quote.fees.platformFee.currency}`;
-        if (quote.fees.paymentMethodFee) feeDetails += `\n  Payment Method Fee: ${quote.fees.paymentMethodFee.amount} ${quote.fees.paymentMethodFee.currency}`;
-        if (quote.fees.networkFee) feeDetails += `\n  Network Fee: ${quote.fees.networkFee.amount} ${quote.fees.networkFee.currency}`;
-        if (quote.fees.integratorFee) feeDetails += `\n  Integrator Fee: ${quote.fees.integratorFee.amount} ${quote.fees.integratorFee.currency}`;
+        if (quote.fees.fxFee)
+          feeDetails += `\n  FX Fee: ${quote.fees.fxFee.amount} ${quote.fees.fxFee.currency}`;
+        if (quote.fees.platformFee)
+          feeDetails += `\n  Platform Fee: ${quote.fees.platformFee.amount} ${quote.fees.platformFee.currency}`;
+        if (quote.fees.paymentMethodFee)
+          feeDetails += `\n  Payment Method Fee: ${quote.fees.paymentMethodFee.amount} ${quote.fees.paymentMethodFee.currency}`;
+        if (quote.fees.networkFee)
+          feeDetails += `\n  Network Fee: ${quote.fees.networkFee.amount} ${quote.fees.networkFee.currency}`;
+        if (quote.fees.integratorFee)
+          feeDetails += `\n  Integrator Fee: ${quote.fees.integratorFee.amount} ${quote.fees.integratorFee.currency}`;
 
         return {
           content: [
@@ -96,7 +123,8 @@ To execute this quote, use 'create_transfer' with this quoteId and include bank 
         const response = await client.getQuote(quoteId);
         const quote = response.quote;
 
-        const isExpired = quote.status === "QUOTE_STATUS_EXPIRED" || new Date(quote.expiresAt) < new Date();
+        const isExpired =
+          quote.status === "QUOTE_STATUS_EXPIRED" || new Date(quote.expiresAt) < new Date();
         const isUsed = quote.status === "QUOTE_STATUS_USED";
         const isCancelled = quote.status === "QUOTE_STATUS_CANCELLED";
 
@@ -108,7 +136,10 @@ To execute this quote, use 'create_transfer' with this quoteId and include bank 
         } else if (isExpired) {
           statusMessage = "This quote has expired. Create a new quote to proceed.";
         } else {
-          const expiresIn = Math.max(0, Math.floor((new Date(quote.expiresAt).getTime() - Date.now()) / 1000));
+          const expiresIn = Math.max(
+            0,
+            Math.floor((new Date(quote.expiresAt).getTime() - Date.now()) / 1000)
+          );
           statusMessage = `This quote is active and expires in ${expiresIn} seconds.`;
         }
 

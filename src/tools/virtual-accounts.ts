@@ -14,23 +14,61 @@ export function registerVirtualAccountTools(server: McpServer, client: StablesAp
     "Create a virtual bank account for a customer to receive fiat deposits. Deposits can automatically convert to crypto and payout to a wallet.",
     {
       customerId: z.string().describe("The customer ID to create the virtual account for"),
-      sourceCurrency: z.string().describe("Currency for the virtual account (e.g., 'USD', 'EUR', 'GBP')"),
-      depositHandlingMode: z.enum(["auto_payout", "hold", "manual"]).optional()
-        .describe("How to handle deposits: 'auto_payout' converts and sends to wallet, 'hold' keeps as fiat, 'manual' requires approval"),
+      sourceCurrency: z
+        .string()
+        .describe("Currency for the virtual account (e.g., 'USD', 'EUR', 'GBP')"),
+      depositHandlingMode: z
+        .enum(["auto_payout", "hold", "manual"])
+        .optional()
+        .describe(
+          "How to handle deposits: 'auto_payout' converts and sends to wallet, 'hold' keeps as fiat, 'manual' requires approval"
+        ),
       destinationAddress: z.string().optional().describe("Crypto wallet address for payouts"),
-      destinationPaymentRail: z.enum(["arbitrum", "avalanche_c_chain", "base", "celo", "ethereum", "optimism", "polygon", "solana", "stellar", "tron"]).optional()
+      destinationPaymentRail: z
+        .enum([
+          "arbitrum",
+          "avalanche_c_chain",
+          "base",
+          "celo",
+          "ethereum",
+          "optimism",
+          "polygon",
+          "solana",
+          "stellar",
+          "tron",
+        ])
+        .optional()
         .describe("Blockchain network for the destination wallet"),
-      destinationCurrency: z.enum(["usdc", "usdt", "dai", "pyusd", "eurc"]).optional()
+      destinationCurrency: z
+        .enum(["usdc", "usdt", "dai", "pyusd", "eurc"])
+        .optional()
         .describe("Stablecoin to receive (default: usdc)"),
     },
-    async ({ customerId, sourceCurrency, depositHandlingMode, destinationAddress, destinationPaymentRail, destinationCurrency }) => {
+    async ({
+      customerId,
+      sourceCurrency,
+      depositHandlingMode,
+      destinationAddress,
+      destinationPaymentRail,
+      destinationCurrency,
+    }) => {
       try {
         const request: {
           source: { currency: string };
           deposit_handling_mode?: "auto_payout" | "hold" | "manual";
           destination?: {
             currency: "usdc" | "usdt" | "dai" | "pyusd" | "eurc";
-            payment_rail: "arbitrum" | "avalanche_c_chain" | "base" | "celo" | "ethereum" | "optimism" | "polygon" | "solana" | "stellar" | "tron";
+            payment_rail:
+              | "arbitrum"
+              | "avalanche_c_chain"
+              | "base"
+              | "celo"
+              | "ethereum"
+              | "optimism"
+              | "polygon"
+              | "solana"
+              | "stellar"
+              | "tron";
             address: string;
           };
         } = {
@@ -53,11 +91,14 @@ export function registerVirtualAccountTools(server: McpServer, client: StablesAp
         let depositInfo = `Currency: ${instructions.currency}`;
         depositInfo += `\nPayment Rails: ${instructions.payment_rails.join(", ")}`;
         if (instructions.bank_name) depositInfo += `\nBank: ${instructions.bank_name}`;
-        if (instructions.bank_account_number) depositInfo += `\nAccount Number: ${instructions.bank_account_number}`;
-        if (instructions.bank_routing_number) depositInfo += `\nRouting Number: ${instructions.bank_routing_number}`;
+        if (instructions.bank_account_number)
+          depositInfo += `\nAccount Number: ${instructions.bank_account_number}`;
+        if (instructions.bank_routing_number)
+          depositInfo += `\nRouting Number: ${instructions.bank_routing_number}`;
         if (instructions.iban) depositInfo += `\nIBAN: ${instructions.iban}`;
         if (instructions.bic) depositInfo += `\nBIC: ${instructions.bic}`;
-        if (instructions.account_holder_name) depositInfo += `\nAccount Holder: ${instructions.account_holder_name}`;
+        if (instructions.account_holder_name)
+          depositInfo += `\nAccount Holder: ${instructions.account_holder_name}`;
 
         const destInfo = account.destination
           ? `\nPayout Address: ${account.destination.address}\nPayment Rail: ${account.destination.payment_rail}\nCurrency: ${account.destination.currency}`
@@ -109,7 +150,9 @@ Share the deposit instructions with the customer to receive funds.`,
     "List all virtual accounts for a customer",
     {
       customerId: z.string().describe("The customer ID to list virtual accounts for"),
-      status: z.enum(["activated", "deactivated", "pending", "closed"]).optional()
+      status: z
+        .enum(["activated", "deactivated", "pending", "closed"])
+        .optional()
         .describe("Filter by account status"),
       limit: z.number().optional().describe("Maximum number of accounts to return"),
     },
@@ -128,13 +171,17 @@ Share the deposit instructions with the customer to receive funds.`,
           };
         }
 
-        const accountList = response.data.map((a) => {
-          const dest = a.destination
-            ? `Payout: ${a.destination.address.slice(0, 10)}... (${a.destination.payment_rail})`
-            : "No payout destination";
-          const balance = a.held_balance ? ` | Balance: ${a.held_balance.amount} ${a.held_balance.currency}` : "";
-          return `- ${a.id}: ${a.source_deposit_instructions.currency} (${a.status}) - ${dest}${balance}`;
-        }).join("\n");
+        const accountList = response.data
+          .map((a) => {
+            const dest = a.destination
+              ? `Payout: ${a.destination.address.slice(0, 10)}... (${a.destination.payment_rail})`
+              : "No payout destination";
+            const balance = a.held_balance
+              ? ` | Balance: ${a.held_balance.amount} ${a.held_balance.currency}`
+              : "";
+            return `- ${a.id}: ${a.source_deposit_instructions.currency} (${a.status}) - ${dest}${balance}`;
+          })
+          .join("\n");
 
         return {
           content: [
@@ -167,7 +214,9 @@ ${accountList}`,
     {
       customerId: z.string().describe("The customer ID"),
       virtualAccountId: z.string().describe("The virtual account ID to update"),
-      depositHandlingMode: z.enum(["auto_payout", "hold", "manual"]).describe("New deposit handling mode"),
+      depositHandlingMode: z
+        .enum(["auto_payout", "hold", "manual"])
+        .describe("New deposit handling mode"),
     },
     async ({ customerId, virtualAccountId, depositHandlingMode }) => {
       try {
@@ -275,7 +324,20 @@ Status: ${account.status}`,
       customerId: z.string().describe("The customer ID"),
       virtualAccountId: z.string().describe("The virtual account ID"),
       limit: z.number().optional().describe("Maximum number of events to return (default: 10)"),
-      eventType: z.enum(["funds_scheduled", "funds_received", "payment_submitted", "payment_processed", "in_review", "refund", "microdeposit", "account_update", "deactivation", "activation"]).optional()
+      eventType: z
+        .enum([
+          "funds_scheduled",
+          "funds_received",
+          "payment_submitted",
+          "payment_processed",
+          "in_review",
+          "refund",
+          "microdeposit",
+          "account_update",
+          "deactivation",
+          "activation",
+        ])
+        .optional()
         .describe("Filter by event type"),
     },
     async ({ customerId, virtualAccountId, limit, eventType: _eventType }) => {
@@ -295,9 +357,11 @@ Status: ${account.status}`,
           };
         }
 
-        const eventList = response.data.map((e) => {
-          return `- ${e.created_at}: ${e.type} - ${e.amount} ${e.currency}${e.deposit_id ? ` (Deposit: ${e.deposit_id})` : ""}`;
-        }).join("\n");
+        const eventList = response.data
+          .map((e) => {
+            return `- ${e.created_at}: ${e.type} - ${e.amount} ${e.currency}${e.deposit_id ? ` (Deposit: ${e.deposit_id})` : ""}`;
+          })
+          .join("\n");
 
         return {
           content: [
