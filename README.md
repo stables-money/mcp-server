@@ -1,6 +1,8 @@
 # Stables MCP Server
 
-An MCP (Model Context Protocol) server that exposes the Stables fiat-to-crypto API to AI agents. This allows AI assistants like Claude, ChatGPT, and others to manage customers, create quotes, execute transfers, and handle virtual accounts programmatically.
+An MCP (Model Context Protocol) server that exposes the Stables fiat-to-crypto API to AI agents. This allows AI assistants like Claude, ChatGPT, Cursor, Codex, and other MCP-compatible clients to manage customers, create USDC and USDT quotes, execute approved transfers, and handle virtual accounts programmatically.
+
+Use it to build stablecoin payment workflows for AI agents and agentic commerce: payouts, virtual account deposits, treasury movement, fiat off-ramping, and webhook reconciliation.
 
 ## What is MCP?
 
@@ -97,6 +99,29 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 Then restart Claude Desktop.
 
+### With Cursor, Codex, ChatGPT, or another MCP client
+
+Use the same command and environment variables in any MCP-compatible client:
+
+```json
+{
+  "mcpServers": {
+    "stables": {
+      "command": "npx",
+      "args": ["stables-mcp-server"],
+      "env": {
+        "STABLES_API_KEY": "your-api-key",
+        "STABLES_API_URL": "https://api.sandbox.stables.money"
+      }
+    }
+  }
+}
+```
+
+## Agent safety
+
+Stables is financial infrastructure. Agents should create quotes, prepare payment objects, and reconcile webhooks, but should require explicit human approval before creating transfers or other money movement. Check customer KYC/KYB status and entitlements before transactional actions, and treat sanctions, unsupported jurisdiction, verification, or compliance failures as hard stops.
+
 ### With MCP Inspector (for testing)
 
 ```bash
@@ -118,7 +143,7 @@ STABLES_API_KEY=your-api-key node build/index.js
 
 ### Creating a customer and getting a quote
 
-**User:** "Create a customer for john@example.com and get a quote to convert 1000 USDC to EUR"
+**User:** "Create a customer for john@example.com and get a quote to convert 1000 USDT to EUR"
 
 **AI (using MCP tools):**
 1. Calls `create_customer` with email and type
