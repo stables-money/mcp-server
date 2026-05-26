@@ -13,17 +13,12 @@ function formatError(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown error";
 }
 
-export function registerNotificationTools(
-  server: McpServer,
-  client: StablesApiClient
-) {
+export function registerNotificationTools(server: McpServer, client: StablesApiClient) {
   server.tool(
     "send_verification_sms",
     "Send a KYC verification link to a customer via SMS. Automatically fetches the customer's phone number and generates a fresh verification link. Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER environment variables.",
     {
-      customerId: z
-        .string()
-        .describe("The customer ID to send the verification SMS to"),
+      customerId: z.string().describe("The customer ID to send the verification SMS to"),
       phone: z
         .string()
         .optional()
@@ -33,15 +28,11 @@ export function registerNotificationTools(
       botName: z
         .string()
         .optional()
-        .describe(
-          "Name of the bot/assistant sending the message (default: 'your assistant')"
-        ),
+        .describe("Name of the bot/assistant sending the message (default: 'your assistant')"),
       verificationLinkTtlSecs: z
         .number()
         .optional()
-        .describe(
-          "TTL for the verification link in seconds (default: 1800)"
-        ),
+        .describe("TTL for the verification link in seconds (default: 1800)"),
     },
     async ({ customerId, phone, botName, verificationLinkTtlSecs }) => {
       try {
@@ -82,10 +73,9 @@ export function registerNotificationTools(
         const assistantName = botName || "your assistant";
 
         // 3. Generate a fresh verification link
-        const verificationResult = await client.generateVerificationLink(
-          customerId,
-          { ttlInSecs: verificationLinkTtlSecs }
-        );
+        const verificationResult = await client.generateVerificationLink(customerId, {
+          ttlInSecs: verificationLinkTtlSecs,
+        });
         const verificationLink = verificationResult.kycLink;
 
         // 4. Compose the SMS message
@@ -94,10 +84,7 @@ export function registerNotificationTools(
         // 5. Send SMS via Twilio REST API (using native fetch, no SDK needed)
         const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`;
         const authHeader =
-          "Basic " +
-          Buffer.from(`${twilioAccountSid}:${twilioAuthToken}`).toString(
-            "base64"
-          );
+          "Basic " + Buffer.from(`${twilioAccountSid}:${twilioAuthToken}`).toString("base64");
 
         const formBody = new URLSearchParams({
           To: recipientPhone,
@@ -115,12 +102,9 @@ export function registerNotificationTools(
         });
 
         if (!twilioResponse.ok) {
-          const errorData = await twilioResponse
-            .json()
-            .catch(() => null);
+          const errorData = await twilioResponse.json().catch(() => null);
           const errorMsg =
-            errorData?.message ||
-            `HTTP ${twilioResponse.status}: ${twilioResponse.statusText}`;
+            errorData?.message || `HTTP ${twilioResponse.status}: ${twilioResponse.statusText}`;
           throw new Error(`Twilio API error: ${errorMsg}`);
         }
 

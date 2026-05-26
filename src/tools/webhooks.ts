@@ -30,10 +30,19 @@ Available event types:
 
 Security: Set a secret to enable HMAC-SHA256 signature verification via X-Webhook-Signature header.`,
     {
-      name: z.string().describe("A descriptive name for this webhook (e.g., 'Payment Status Notifications')"),
+      name: z
+        .string()
+        .describe("A descriptive name for this webhook (e.g., 'Payment Status Notifications')"),
       url: z.string().url().describe("The HTTPS URL to receive webhook POST requests"),
-      eventTypes: z.array(z.string()).describe("List of event types to subscribe to (e.g., ['WEBHOOK_EVENT_TYPE_PAYMENT_STATUS_CHANGED'])"),
-      secret: z.string().optional().describe("Optional signing secret for HMAC-SHA256 webhook signature verification"),
+      eventTypes: z
+        .array(z.string())
+        .describe(
+          "List of event types to subscribe to (e.g., ['WEBHOOK_EVENT_TYPE_PAYMENT_STATUS_CHANGED'])"
+        ),
+      secret: z
+        .string()
+        .optional()
+        .describe("Optional signing secret for HMAC-SHA256 webhook signature verification"),
     },
     async ({ name, url, eventTypes, secret }) => {
       try {
@@ -99,10 +108,12 @@ Available event types include:
           };
         }
 
-        const webhookList = response.subscriptions.map((w) => {
-          const status = w.active ? "Active" : "Inactive";
-          return `- ${w.subscriptionId}: "${w.name}" -> ${w.url} (${status})\n  Events: ${w.eventTypes.join(", ")}`;
-        }).join("\n\n");
+        const webhookList = response.subscriptions
+          .map((w) => {
+            const status = w.active ? "Active" : "Inactive";
+            return `- ${w.subscriptionId}: "${w.name}" -> ${w.url} (${status})\n  Events: ${w.eventTypes.join(", ")}`;
+          })
+          .join("\n\n");
 
         return {
           content: [

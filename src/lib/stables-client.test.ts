@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  StablesApiClient,
-  StablesApiError,
-  createStablesClient,
-} from "./stables-client.js";
+import { StablesApiClient, StablesApiError, createStablesClient } from "./stables-client.js";
 
 // Helper to create a mock Response
 function mockResponse(
@@ -24,7 +20,9 @@ function mockResponse(
 
 describe("StablesApiError", () => {
   it("carries structured error information", () => {
-    const error = new StablesApiError("Not found", 404, "/api/v1/customers/abc", { message: "Not found" });
+    const error = new StablesApiError("Not found", 404, "/api/v1/customers/abc", {
+      message: "Not found",
+    });
     expect(error.message).toBe("Not found");
     expect(error.statusCode).toBe(404);
     expect(error.endpoint).toBe("/api/v1/customers/abc");
@@ -78,7 +76,9 @@ describe("StablesApiClient", () => {
       expect(fetchSpy).toHaveBeenCalledOnce();
       const [url, opts] = fetchSpy.mock.calls[0];
       expect(url).toBe("https://api.test.stables.money/api/v1/customers");
-      expect((opts?.headers as Record<string, string>)["Authorization"]).toBe("Bearer test-api-key");
+      expect((opts?.headers as Record<string, string>)["Authorization"]).toBe(
+        "Bearer test-api-key"
+      );
     });
 
     it("sets Content-Type for POST requests with body", async () => {
@@ -141,10 +141,7 @@ describe("StablesApiClient", () => {
 
     it("throws StablesApiError on 4xx with message body", async () => {
       fetchSpy.mockResolvedValueOnce(
-        mockResponse(
-          { message: "Bad request" },
-          { status: 400, statusText: "Bad Request" }
-        )
+        mockResponse({ message: "Bad request" }, { status: 400, statusText: "Bad Request" })
       );
 
       await expect(client.getCustomer("bad")).rejects.toThrow("Bad request");
@@ -152,10 +149,7 @@ describe("StablesApiClient", () => {
 
     it("throws StablesApiError on 4xx with string error body", async () => {
       fetchSpy.mockResolvedValueOnce(
-        mockResponse(
-          { error: "Forbidden" },
-          { status: 403, statusText: "Forbidden" }
-        )
+        mockResponse({ error: "Forbidden" }, { status: 403, statusText: "Forbidden" })
       );
 
       await expect(client.getCustomer("forbidden")).rejects.toThrow("Forbidden");
@@ -182,9 +176,7 @@ describe("StablesApiClient", () => {
     });
 
     it("handles 204 No Content responses", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        new Response(null, { status: 204, statusText: "No Content" })
-      );
+      fetchSpy.mockResolvedValueOnce(new Response(null, { status: 204, statusText: "No Content" }));
 
       await client.updateMetadata("cust_123", { key: "value" });
       expect(fetchSpy).toHaveBeenCalledOnce();
@@ -212,9 +204,7 @@ describe("StablesApiClient", () => {
     }, 30_000);
 
     it("throws after exhausting retries on 5xx", async () => {
-      fetchSpy.mockResolvedValue(
-        new Response("fail", { status: 502, statusText: "Bad Gateway" })
-      );
+      fetchSpy.mockResolvedValue(new Response("fail", { status: 502, statusText: "Bad Gateway" }));
 
       await expect(client.listCustomers()).rejects.toThrow("HTTP 502: Bad Gateway");
       expect(fetchSpy).toHaveBeenCalledTimes(4); // 1 initial + 3 retries
@@ -323,7 +313,9 @@ describe("StablesApiClient", () => {
     });
 
     it("listTransfers builds query params correctly", async () => {
-      fetchSpy.mockResolvedValueOnce(mockResponse({ transfers: [], page: { nextPageToken: "", total: 0 } }));
+      fetchSpy.mockResolvedValueOnce(
+        mockResponse({ transfers: [], page: { nextPageToken: "", total: 0 } })
+      );
       await client.listTransfers({ status: "COMPLETED", customerId: "c1", pageSize: 10 });
       const url = fetchSpy.mock.calls[0][0] as string;
       expect(url).toContain("status=COMPLETED");
@@ -347,14 +339,18 @@ describe("StablesApiClient", () => {
     it("revokeApiKey hits DELETE /api/v1/api-keys/:id", async () => {
       fetchSpy.mockResolvedValueOnce(new Response(null, { status: 204 }));
       await client.revokeApiKey("key_123");
-      expect(fetchSpy.mock.calls[0][0]).toBe("https://api.test.stables.money/api/v1/api-keys/key_123");
+      expect(fetchSpy.mock.calls[0][0]).toBe(
+        "https://api.test.stables.money/api/v1/api-keys/key_123"
+      );
       expect((fetchSpy.mock.calls[0][1] as RequestInit).method).toBe("DELETE");
     });
 
     it("deleteWebhook hits DELETE /api/v1/webhooks/:id", async () => {
       fetchSpy.mockResolvedValueOnce(new Response(null, { status: 204 }));
       await client.deleteWebhook("wh_123");
-      expect(fetchSpy.mock.calls[0][0]).toBe("https://api.test.stables.money/api/v1/webhooks/wh_123");
+      expect(fetchSpy.mock.calls[0][0]).toBe(
+        "https://api.test.stables.money/api/v1/webhooks/wh_123"
+      );
       expect((fetchSpy.mock.calls[0][1] as RequestInit).method).toBe("DELETE");
     });
   });
