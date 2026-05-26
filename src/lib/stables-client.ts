@@ -3,6 +3,8 @@
  * Synced with OpenAPI spec from https://api.stables.money/docs
  */
 
+import { randomUUID } from "node:crypto";
+
 // ============ CUSTOM ERROR ============
 
 export class StablesApiError extends Error {
@@ -538,7 +540,7 @@ export class StablesApiClient {
   }
 
   private generateIdempotencyKey(): string {
-    return crypto.randomUUID();
+    return randomUUID();
   }
 
   // ============ CUSTOMERS ============
