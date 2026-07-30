@@ -150,8 +150,8 @@ export interface GenerateVerificationLinkRequest {
 }
 
 export interface GenerateVerificationLinkResponse {
-  customerId: string;
-  kycLink: string;
+  customer_id: string;
+  kyc_link: string;
 }
 
 // ============ TRANSFER TYPES ============
