@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { StablesApiClient, StablesApiError, createStablesClient } from "./stables-client.js";
+import {
+  StablesApiClient,
+  StablesApiError,
+  apiUrlForKey,
+  createStablesClient,
+} from "./stables-client.js";
 
 // Helper to create a mock Response
 function mockResponse(
@@ -45,6 +50,42 @@ describe("createStablesClient", () => {
     delete process.env.STABLES_API_URL;
     const client = createStablesClient();
     expect(client).toBeInstanceOf(StablesApiClient);
+  });
+
+  describe("environment inferred from the key", () => {
+    it("sends a live key to production", () => {
+      expect(apiUrlForKey("sti_live_abc123_secret")).toBe("https://api.stables.money");
+    });
+
+    it("sends a test key to sandbox", () => {
+      expect(apiUrlForKey("sti_test_abc123_secret")).toBe("https://api.sandbox.stables.money");
+    });
+
+    it("declines to guess for a local key or an unrecognised shape", () => {
+      // Only the caller knows where a local deployment lives.
+      expect(apiUrlForKey("sti_local_abc123_secret")).toBeNull();
+      expect(apiUrlForKey("not-a-stables-key")).toBeNull();
+    });
+
+    it("routes a test key to sandbox with no STABLES_API_URL set", async () => {
+      vi.stubEnv("STABLES_API_KEY", "sti_test_abc123_secret");
+      delete process.env.STABLES_API_URL;
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+      fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ customers: [] })));
+      await createStablesClient().listCustomers();
+      expect(fetchSpy.mock.calls[0][0]).toContain("https://api.sandbox.stables.money");
+      fetchSpy.mockRestore();
+    });
+
+    it("lets an explicit STABLES_API_URL outrank the key", async () => {
+      vi.stubEnv("STABLES_API_KEY", "sti_live_abc123_secret");
+      vi.stubEnv("STABLES_API_URL", "https://api.staging.stables.money");
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+      fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ customers: [] })));
+      await createStablesClient().listCustomers();
+      expect(fetchSpy.mock.calls[0][0]).toContain("https://api.staging.stables.money");
+      fetchSpy.mockRestore();
+    });
   });
 
   it("throws if STABLES_API_KEY is missing", () => {
