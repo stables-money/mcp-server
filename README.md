@@ -68,7 +68,26 @@ The server requires the following environment variables:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `STABLES_API_KEY` | Yes | Your Stables API key |
-| `STABLES_API_URL` | No | API base URL (default: `https://api.sandbox.stables.money`). Must use HTTPS. |
+| `STABLES_API_URL` | No | API base URL. Defaults to the environment your key belongs to (see below). Must use HTTPS. |
+
+### Which environment you're talking to
+
+Stables keys carry their environment: `sti_test_…` is a sandbox key, `sti_live_…`
+is a production key, and the API refuses a key that arrives at the wrong
+environment. So you don't have to set a URL — leave `STABLES_API_URL` unset and
+the key decides:
+
+| Your key | Where requests go |
+|----------|-------------------|
+| `sti_test_…` | `https://api.sandbox.stables.money` |
+| `sti_live_…` | `https://api.stables.money` — **real money** |
+| `sti_local_…` or anything else | production, unless you set `STABLES_API_URL` |
+
+Setting `STABLES_API_URL` always wins, which is how you reach staging, dev or a
+local deployment.
+
+**Start with a sandbox key.** An agent holding a live key can move real money on
+your behalf; see [agent safety](https://docs.stables.money/get-started/getting-started/quickstart/building-with-ai/agent-safety).
 
 ## Usage
 

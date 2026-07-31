@@ -802,14 +802,42 @@ export class StablesApiClient {
   }
 }
 
+const PRODUCTION_API_URL = "https://api.stables.money";
+const SANDBOX_API_URL = "https://api.sandbox.stables.money";
+
+/**
+ * Which environment a key belongs to, read from the key itself.
+ *
+ * Stables keys are `sti_<env>_<prefix>_<secret>` with env one of local, test or
+ * live, and the api service refuses a key whose segment does not match the
+ * deployment it arrives at. So the key already decides the environment, and a
+ * default base URL is only ever a guess at something we can read.
+ *
+ * Guessing had a cost in both directions: the code defaulted to production while
+ * the README promised sandbox, so a test key with no STABLES_API_URL set failed
+ * authentication against production and read as "my key is invalid" when the key
+ * was fine.
+ */
+export function apiUrlForKey(apiKey: string): string | null {
+  const env = apiKey.split("_")[1];
+  if (env === "live") return PRODUCTION_API_URL;
+  if (env === "test") return SANDBOX_API_URL;
+  // "local" points at a deployment only the caller knows about, and anything
+  // else is not a key shape we recognise.
+  return null;
+}
+
 // Create client from environment variables
 export function createStablesClient(): StablesApiClient {
   const apiKey = process.env.STABLES_API_KEY;
-  const baseUrl = process.env.STABLES_API_URL || "https://api.stables.money";
 
   if (!apiKey) {
     throw new Error("STABLES_API_KEY environment variable is required");
   }
+
+  // An explicit URL always wins: it is the only way to reach staging, dev or a
+  // local deployment, and the caller stating an environment outranks inference.
+  const baseUrl = process.env.STABLES_API_URL || apiUrlForKey(apiKey) || PRODUCTION_API_URL;
 
   if (!baseUrl.startsWith("https://")) {
     throw new Error("STABLES_API_URL must use HTTPS");
