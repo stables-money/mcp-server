@@ -10,7 +10,7 @@ MCP (Model Context Protocol) is an open standard that provides a standardized wa
 
 ## Features
 
-This MCP server provides 25 tools across 7 categories:
+This MCP server provides 24 tools across 6 categories:
 
 ### Customer Management
 - `create_customer` - Create individual or business customers
@@ -48,9 +48,6 @@ This MCP server provides 25 tools across 7 categories:
 - `list_webhooks` - List all webhook subscriptions
 - `delete_webhook` - Delete a webhook subscription
 
-### Notifications
-- `send_verification_sms` - Send a KYC verification link to a customer via SMS (requires Twilio)
-
 ## Installation
 
 ```bash
@@ -72,9 +69,6 @@ The server requires the following environment variables:
 |----------|----------|-------------|
 | `STABLES_API_KEY` | Yes | Your Stables API key |
 | `STABLES_API_URL` | No | API base URL (default: `https://api.sandbox.stables.money`). Must use HTTPS. |
-| `TWILIO_ACCOUNT_SID` | No | Twilio Account SID (required for `send_verification_sms`) |
-| `TWILIO_AUTH_TOKEN` | No | Twilio Auth Token (required for `send_verification_sms`) |
-| `TWILIO_PHONE_NUMBER` | No | Twilio phone number to send from (required for `send_verification_sms`) |
 
 ## Usage
 
@@ -203,8 +197,7 @@ stables-mcp-server/
 │       ├── transfers.ts      # Transfer tools (3)
 │       ├── virtual-accounts.ts # Virtual account tools (6)
 │       ├── api-keys.ts       # API key tools (4)
-│       ├── webhooks.ts       # Webhook tools (3)
-│       └── notifications.ts  # Notification tools (1)
+│       └── webhooks.ts       # Webhook tools (3)
 ├── package.json
 ├── tsconfig.json
 ├── vitest.config.ts
@@ -453,18 +446,6 @@ Delete a webhook subscription.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | webhookId | string | Yes | Webhook subscription ID |
-
-### Notification Tools
-
-#### send_verification_sms
-Send a KYC verification link to a customer via SMS. Requires Twilio environment variables.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| customerId | string | Yes | Customer ID to send verification to |
-| phone | string | No | Override phone number (uses customer's phone if not provided) |
-| botName | string | No | Name of the assistant sending the message |
-| verificationLinkTtlSecs | number | No | Verification link expiry in seconds (default: 1800) |
 
 ## Security
 

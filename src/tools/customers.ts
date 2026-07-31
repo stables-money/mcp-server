@@ -447,8 +447,8 @@ ${customerList}`,
               type: "text",
               text: `Verification link generated!
 
-Customer ID: ${result.customerId}
-Verification Link: ${result.kycLink}
+Customer ID: ${result.customer_id}
+Verification Link: ${result.kyc_link}
 
 The link will expire in ${ttlDisplay}.
 Share this link with the customer to complete their identity verification.`,
