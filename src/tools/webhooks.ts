@@ -108,11 +108,12 @@ Tip: Return 200 quickly and process events asynchronously. Use eventId for idemp
                 type: "text",
                 text: `No webhooks configured. Use 'create_webhook' to subscribe to events.
 
-Available event types include:
-- WEBHOOK_EVENT_TYPE_PAYMENT_STATUS_CHANGED
-- WEBHOOK_EVENT_TYPE_KYC_STATUS_CHANGED
-- WEBHOOK_EVENT_TYPE_VA_DEPOSIT_RECEIVED
-- WEBHOOK_EVENT_TYPE_ALL (subscribe to everything)`,
+Common event types:
+- transfer.updated.status_transitioned
+- kyc_link.updated.status_transitioned
+- virtual_account.activity.created
+- rfi.created
+- all (subscribe to everything)`,
               },
             ],
           };
@@ -174,6 +175,69 @@ ${webhookList}`,
             {
               type: "text",
               text: `Failed to delete webhook: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // List Webhook Deliveries
+  server.tool(
+    "list_webhook_deliveries",
+    "List recent webhook delivery attempts with their HTTP status and retry state. This is the first place to look when an integration is not receiving events: it shows whether Stables sent them and what the endpoint answered.",
+    {
+      pageSize: z.number().optional().describe("How many attempts to return (default 10, max 50)"),
+      status: z
+        .enum(["PENDING", "SUCCESS", "FAILED", "RETRYING"])
+        .optional()
+        .describe("Filter by delivery status"),
+      eventType: z.string().optional().describe("Filter by event type (e.g. 'transfer.created')"),
+    },
+    async ({ pageSize, status, eventType }) => {
+      try {
+        const { deliveries } = await client.listWebhookDeliveries({
+          pageSize: pageSize ?? 10,
+          status,
+          eventType,
+        });
+
+        if (!deliveries?.length) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: "No webhook deliveries found. Attempts only exist where an active subscription matched an event — check 'list_webhooks' if you expected some.",
+              },
+            ],
+          };
+        }
+
+        const list = deliveries
+          .map((d) => {
+            const code = d.responseCode ? ` HTTP ${d.responseCode}` : "";
+            const attempts = d.attemptCount > 1 ? `, ${d.attemptCount} attempts` : "";
+            const retry = d.nextRetryAt ? `, next retry ${d.nextRetryAt}` : "";
+            const target = d.subscriptionName ?? d.subscriptionUrl ?? "endpoint removed";
+            return `- ${d.eventType} → ${target}: ${d.status}${code}${attempts}${retry}`;
+          })
+          .join("\n");
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Recent webhook deliveries (${deliveries.length}):\n\n${list}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Failed to list webhook deliveries: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
           isError: true,

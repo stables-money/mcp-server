@@ -362,10 +362,17 @@ export interface VirtualAccount {
   };
 }
 
+/**
+ * `deposit_handling_mode` is deliberately absent — it is not part of the create
+ * schema (the server sets it, defaulting to auto_payout) and was being silently
+ * ignored. Change it afterwards with updateVirtualAccount.
+ */
 export interface CreateVirtualAccountRequest {
   source: { currency: string };
-  deposit_handling_mode?: DepositHandlingMode;
+  /** Required for fiat_to_crypto, which is the default. */
   destination?: VirtualAccountDestination;
+  workflow_type?: "fiat_to_crypto" | "fiat_to_fiat";
+  developer_fee_percent?: string;
   metadata?: Record<string, string>;
 }
 
@@ -374,15 +381,85 @@ export interface ListVirtualAccountsResponse {
   data: VirtualAccount[];
 }
 
+/**
+ * One deposit and its payout. The client previously described these as
+ * `{type, amount, currency}`, none of which exist, so every row rendered as
+ * "undefined: undefined undefined".
+ */
 export interface VirtualAccountHistoryEvent {
   id: string;
-  type: string;
-  customer_id: string;
   virtual_account_id: string;
-  amount: string;
-  currency: string;
+  deposit_amount?: string;
+  deposit_currency?: string;
   deposit_id?: string;
+  sender_name?: string;
+  sender_reference?: string;
+  handling_mode?: string;
+  payout_status?: string;
+  payout_amount?: string;
+  payout_currency?: string;
+  payout_network?: string;
+  payout_address?: string;
+  payout_transaction_hash?: string;
+  payout_completed_at?: string;
+  platform_fee_amount?: string;
+  platform_fee_currency?: string;
+  deposited_at?: string;
+  created_at?: string;
+}
+
+/** The envelope is `{data, has_more}` — there is no `count`. */
+export interface VirtualAccountHistoryResponse {
+  data: VirtualAccountHistoryEvent[];
+  has_more?: boolean;
+}
+
+// ============ RFI TYPES ============
+
+/**
+ * A request for information: what a customer must supply before a held
+ * verification or payout can proceed. Compliance can raise one at any time, so
+ * an integration that never reads them will stall without knowing why.
+ */
+export interface Rfi {
+  rfi_id: string;
+  type: string;
+  status: string;
+  customer_id: string;
+  kyc_level?: string;
+  reasons?: unknown[];
+  requirements?: unknown[];
   created_at: string;
+  expires_at?: string;
+  resolved_at?: string;
+}
+
+// ============ WEBHOOK DELIVERY TYPES ============
+
+export interface WebhookDelivery {
+  deliveryId: string;
+  subscriptionId?: string | null;
+  subscriptionName?: string | null;
+  subscriptionUrl?: string | null;
+  eventType: string;
+  status: "PENDING" | "SUCCESS" | "FAILED" | "RETRYING";
+  attemptCount: number;
+  lastAttemptAt?: string | null;
+  nextRetryAt?: string | null;
+  responseCode?: number | null;
+  createdAt?: string | null;
+}
+
+// ============ SANDBOX TYPES ============
+
+export interface SandboxDepositRequest {
+  amount: string;
+  scenario?: "create_only" | "completed" | "failed";
+  external_deposit_id?: string;
+  sender_name?: string;
+  sender_reference?: string;
+  failure_code?: string;
+  failure_message?: string;
 }
 
 // ============ QUOTE TYPES ============
@@ -745,7 +822,7 @@ export class StablesApiClient {
       startingAfter?: string;
       endingBefore?: string;
     }
-  ): Promise<{ count: number; data: VirtualAccountHistoryEvent[] }> {
+  ): Promise<VirtualAccountHistoryResponse> {
     const searchParams = new URLSearchParams();
     if (params?.limit) searchParams.set("limit", params.limit.toString());
     if (params?.depositId) searchParams.set("deposit_id", params.depositId);
@@ -753,7 +830,7 @@ export class StablesApiClient {
     if (params?.endingBefore) searchParams.set("ending_before", params.endingBefore);
 
     const query = searchParams.toString();
-    return this.requestWithRetry<{ count: number; data: VirtualAccountHistoryEvent[] }>(
+    return this.requestWithRetry<VirtualAccountHistoryResponse>(
       `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/history${query ? `?${query}` : ""}`
     );
   }
@@ -861,6 +938,94 @@ export class StablesApiClient {
         method: "POST",
         body: JSON.stringify({ network, destination }),
       }
+    );
+  }
+
+  /** Replace the payout wallet on an existing payment route. */
+  async updateVirtualAccountDestination(
+    customerId: string,
+    virtualAccountId: string,
+    destination: VirtualAccountDestination
+  ): Promise<VirtualAccount> {
+    return this.requestWithRetry<VirtualAccount>(
+      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/destination`,
+      {
+        method: "PUT",
+        body: JSON.stringify(destination),
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
+      }
+    );
+  }
+
+  /** Compliance requests for information against a customer. */
+  async listCustomerRfis(customerId: string): Promise<{ rfis: Rfi[] }> {
+    return this.requestWithRetry<{ rfis: Rfi[] }>(`/api/v1/customers/${customerId}/rfis`);
+  }
+
+  async getRfi(rfiId: string): Promise<Rfi> {
+    return this.requestWithRetry<Rfi>(`/api/v1/rfis/${rfiId}`);
+  }
+
+  /** What verification the customer still owes. */
+  async getKycCapabilities(customerId: string): Promise<Record<string, unknown>> {
+    return this.requestWithRetry<Record<string, unknown>>(
+      `/api/v1/customer/${customerId}/kyc-capabilities`
+    );
+  }
+
+  async listAvailableEntitlements(customerId: string): Promise<Record<string, unknown>> {
+    return this.requestWithRetry<Record<string, unknown>>(
+      `/api/v1/customers/${customerId}/entitlements/available`
+    );
+  }
+
+  /**
+   * Sandbox only. Drives a deposit through the route or transfer so an agent can
+   * reach a terminal state in test, which is otherwise impossible without a real
+   * bank payment.
+   */
+  async simulateVirtualAccountDeposit(
+    customerId: string,
+    virtualAccountId: string,
+    data: SandboxDepositRequest
+  ): Promise<Record<string, unknown>> {
+    return this.requestWithRetry<Record<string, unknown>>(
+      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/sandbox/simulate-deposit`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
+      }
+    );
+  }
+
+  async simulateTransferDeposit(
+    transferId: string,
+    data?: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    return this.requestWithRetry<Record<string, unknown>>(
+      `/api/v1/transfers/${transferId}/sandbox/simulate-deposit`,
+      {
+        method: "POST",
+        body: JSON.stringify(data ?? {}),
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
+      }
+    );
+  }
+
+  /** Recent webhook delivery attempts — the first place to look when events go missing. */
+  async listWebhookDeliveries(params?: {
+    pageSize?: number;
+    status?: string;
+    eventType?: string;
+  }): Promise<{ deliveries: WebhookDelivery[] }> {
+    const search = new URLSearchParams();
+    if (params?.pageSize) search.set("pageSize", String(params.pageSize));
+    if (params?.status) search.set("status", params.status);
+    if (params?.eventType) search.set("eventType", params.eventType);
+    const query = search.toString();
+    return this.requestWithRetry<{ deliveries: WebhookDelivery[] }>(
+      `/api/v1/webhooks/deliveries${query ? `?${query}` : ""}`
     );
   }
 

@@ -33,7 +33,7 @@ import { registerTransferTools } from "./tools/transfers.js";
 import { registerVirtualAccountTools } from "./tools/virtual-accounts.js";
 import { registerApiKeyTools } from "./tools/api-keys.js";
 import { registerWebhookTools } from "./tools/webhooks.js";
-import { registerPaymentMethodTools } from "./tools/payment-methods.js";
+import { registerSandboxTools } from "./tools/sandbox.js";
 
 // Validate environment
 const apiKey = process.env.STABLES_API_KEY;
@@ -46,7 +46,7 @@ if (!apiKey) {
 // Create the MCP server
 const server = new McpServer({
   name: "stables-mcp-server",
-  version: "2.0.0",
+  version: "2.1.0",
   description:
     "Stables fiat-to-crypto API for AI agents - manage customers, quotes, transfers, and virtual accounts",
 });
@@ -61,7 +61,7 @@ registerTransferTools(server, stablesClient);
 registerVirtualAccountTools(server, stablesClient);
 registerApiKeyTools(server, stablesClient);
 registerWebhookTools(server, stablesClient);
-registerPaymentMethodTools(server, stablesClient);
+registerSandboxTools(server, stablesClient);
 
 // Start the server with STDIO transport
 async function main() {

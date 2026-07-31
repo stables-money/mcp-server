@@ -10,7 +10,7 @@ MCP (Model Context Protocol) is an open standard that provides a standardized wa
 
 ## Features
 
-This MCP server provides 23 tools across 7 categories:
+This MCP server provides 26 tools across 7 categories:
 
 ### Customer Management
 - `create_customer` - Create individual or business customers
@@ -33,10 +33,12 @@ This MCP server provides 23 tools across 7 categories:
 - `create_virtual_account` - Create virtual bank accounts for fiat deposits
 - `list_virtual_accounts` - List virtual accounts for a customer
 - `update_virtual_account` - Update virtual account settings
-- `get_virtual_account_history` - Get activity history for a virtual account
+- `get_virtual_account_history` - Get deposits and their payouts for a payment route
+- `update_route_destination` - Change the payout wallet on an existing route
 
-### Payment Methods
-- `validate_payment_method` - Check payout details against a currency's rules before creating a quote or transfer
+### Sandbox
+- `simulate_route_deposit` - Simulate a fiat deposit into a payment route (sandbox only)
+- `simulate_transfer_deposit` - Simulate the inbound crypto an off-ramp transfer awaits (sandbox only)
 
 ### API Keys
 - `create_api_key` - Create a new API key
@@ -48,6 +50,7 @@ This MCP server provides 23 tools across 7 categories:
 - `create_webhook` - Subscribe to events via webhook
 - `list_webhooks` - List all webhook subscriptions
 - `delete_webhook` - Delete a webhook subscription
+- `list_webhook_deliveries` - Recent delivery attempts, status codes and retry state
 
 ## Installation
 
@@ -161,7 +164,7 @@ STABLES_API_KEY=your-api-key node build/index.js
 
 **AI (using MCP tools):**
 1. Calls `create_customer` with email and type
-2. Calls `create_quote` with USDC, amount, EUR destination, network, country, and payment method
+2. Calls `create_quote` with source USDT + network, destination EUR + country, and `destinationNetwork` (`swift` or `bank`)
 3. Returns customer details and quote information
 
 ### Checking transfer status
@@ -169,16 +172,24 @@ STABLES_API_KEY=your-api-key node build/index.js
 **User:** "What's the status of all my pending transfers?"
 
 **AI (using MCP tools):**
-1. Calls `list_transfers` with `status=PENDING`
-2. Returns formatted list of pending transfers
+1. Calls `list_transfers` with `status=created` or `status=in_progress` (statuses are lowercase)
+2. Returns a formatted list of in-flight transfers
 
 ### Setting up auto-payout
 
-**User:** "Create a virtual USD account for customer abc123 that auto-pays to my Polygon USDC wallet 0x..."
+**User:** "Create a payment route for customer abc123 that pays AUD deposits out to my Polygon USDT wallet 0x..."
 
 **AI (using MCP tools):**
-1. Calls `create_virtual_account` with customer ID, USD currency, and Polygon destination
-2. Returns virtual account details with deposit instructions
+1. Calls `create_virtual_account` with the customer ID, AUD source currency, and the Polygon destination (the payout address is mandatory)
+2. Returns the deposit instructions to share with the customer
+
+### Paying out to a European beneficiary
+
+**User:** "Pay 500 EUR to this German bank account"
+
+**AI (using MCP tools):**
+1. Collects the extra beneficiary details EUR requires — `recipientType`, a full address, and `dateOfBirth` for individuals — before doing anything else
+2. Calls `create_quote`, then `create_transfer` once a human approves
 
 ## Development
 
@@ -218,7 +229,7 @@ stables-mcp-server/
 │       ├── virtual-accounts.ts # Virtual account tools (6)
 │       ├── api-keys.ts       # API key tools (4)
 │       ├── webhooks.ts       # Webhook tools (3)
-│       └── payment-methods.ts # Payment method validation (1)
+│       └── sandbox.ts        # Sandbox deposit simulation (2)
 ├── package.json
 ├── tsconfig.json
 ├── vitest.config.ts

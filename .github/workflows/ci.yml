@@ -35,3 +35,10 @@ jobs:
 
       - name: Test
         run: npm test
+
+      # The tests mock fetch, so they prove what we send and nothing about what
+      # the API still accepts — which is how four months of drift went unnoticed.
+      # This checks our endpoints against the live spec, and skips itself if the
+      # spec is unreachable so an unrelated outage cannot fail a build.
+      - name: Check for API spec drift
+        run: npm run check:spec
