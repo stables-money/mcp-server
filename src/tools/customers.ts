@@ -5,7 +5,12 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { StablesApiClient, StablesApiError, CreateCustomerRequest } from "../lib/stables-client.js";
+import {
+  StablesApiClient,
+  StablesApiError,
+  CreateCustomerRequest,
+  UpdateCustomerRequest,
+} from "../lib/stables-client.js";
 
 function formatError(error: unknown): string {
   if (error instanceof StablesApiError) {
@@ -187,7 +192,10 @@ export function registerCustomerTools(server: McpServer, client: StablesApiClien
       try {
         const isBusiness = params.customerType === "business";
 
-        // Build address for individuals
+        // Tool inputs stay camelCase for the agent's benefit; the wire body is
+        // snake_case, and unknown keys are stripped rather than rejected — which
+        // is why the old camelCase body arrived empty and 400'd on the missing
+        // required fields instead of on the wrong ones.
         const address =
           !isBusiness && params.addressLine1
             ? {
@@ -195,12 +203,11 @@ export function registerCustomerTools(server: McpServer, client: StablesApiClien
                 line2: params.addressLine2,
                 city: params.addressCity || "",
                 state: params.addressState,
-                postalCode: params.addressPostalCode,
+                postal_code: params.addressPostalCode,
                 country: params.addressCountry || "",
               }
             : undefined;
 
-        // Build legal address for businesses
         const legalAddress =
           isBusiness && params.legalAddressLine1
             ? {
@@ -208,55 +215,54 @@ export function registerCustomerTools(server: McpServer, client: StablesApiClien
                 line2: params.legalAddressLine2,
                 city: params.legalAddressCity || "",
                 state: params.legalAddressState,
-                postalCode: params.legalAddressPostalCode,
+                postal_code: params.legalAddressPostalCode,
                 country: params.legalAddressCountry || "",
               }
             : undefined;
 
-        // Build request body based on customer type
         const requestBody: Record<string, unknown> = {
           email: params.email,
-          customerType: isBusiness ? "CUSTOMER_TYPE_BUSINESS" : "CUSTOMER_TYPE_INDIVIDUAL",
-          externalCustomerId: params.externalCustomerId || crypto.randomUUID(),
+          customer_type: isBusiness ? "business" : "individual",
+          external_customer_id: params.externalCustomerId || crypto.randomUUID(),
           phone: params.phone,
           entitlements: params.entitlements,
         };
 
         if (isBusiness) {
           Object.assign(requestBody, {
-            companyName: params.companyName,
+            company_name: params.companyName,
             country: params.country,
-            registrationNumber: params.registrationNumber,
-            incorporatedOn: params.incorporatedOn,
+            registration_number: params.registrationNumber,
+            incorporated_on: params.incorporatedOn,
             type: params.type,
-            taxId: params.taxId,
-            registrationLocation: params.registrationLocation,
+            tax_id: params.taxId,
+            registration_location: params.registrationLocation,
             website: params.website,
-            legalAddress,
-            describeBusiness: params.describeBusiness,
-            conductMoneyServices: params.conductMoneyServices,
-            describeMoneyServices: params.describeMoneyServices,
-            describeComplianceControls: params.describeComplianceControls,
-            mainSourceOfFunds: params.mainSourceOfFunds,
-            accountPurpose: params.accountPurpose,
-            accountPurposeOther: params.accountPurposeOther,
-            isYourBusinessADao: params.isYourBusinessADao,
-            industrySelection: params.industrySelection,
-            expectedAnnualRevenue: params.expectedAnnualRevenue,
-            expectedMonthlyPayments: params.expectedMonthlyPayments,
-            sourceOfFunds: params.sourceOfFunds,
-            sourceOfFundsDescription: params.sourceOfFundsDescription,
-            operateInProhibitedCountry: params.operateInProhibitedCountry,
-            doesYourBusinessEngageInHighRiskActivities:
+            legal_address: legalAddress,
+            describe_business: params.describeBusiness,
+            conduct_money_services: params.conductMoneyServices,
+            describe_money_services: params.describeMoneyServices,
+            describe_compliance_controls: params.describeComplianceControls,
+            main_source_of_funds: params.mainSourceOfFunds,
+            account_purpose: params.accountPurpose,
+            account_purpose_other: params.accountPurposeOther,
+            is_your_business_a_dao: params.isYourBusinessADao,
+            industry_selection: params.industrySelection,
+            expected_annual_revenue: params.expectedAnnualRevenue,
+            expected_monthly_payments: params.expectedMonthlyPayments,
+            source_of_funds: params.sourceOfFunds,
+            source_of_funds_description: params.sourceOfFundsDescription,
+            operate_in_prohibited_country: params.operateInProhibitedCountry,
+            does_your_business_engage_in_high_risk_activities:
               params.doesYourBusinessEngageInHighRiskActivities,
-            acceptTerms: params.acceptTerms,
-            howDidYouComeAcrossStables: params.howDidYouComeAcrossStables,
+            accept_terms: params.acceptTerms,
+            how_did_you_come_across_stables: params.howDidYouComeAcrossStables,
           });
         } else {
           Object.assign(requestBody, {
-            firstName: params.firstName,
-            lastName: params.lastName,
-            middleName: params.middleName,
+            first_name: params.firstName,
+            last_name: params.lastName,
+            middle_name: params.middleName,
             dob: params.dob,
             nationality: params.nationality,
             address,
@@ -271,7 +277,7 @@ export function registerCustomerTools(server: McpServer, client: StablesApiClien
         const customer = await client.createCustomer(
           requestBody as unknown as CreateCustomerRequest
         );
-        const verificationStatus = customer.verificationLevels?.[0]?.status || "NOT_STARTED";
+        const verificationStatus = customer.verification_levels?.[0]?.status || "not_started";
         const entitlementsList =
           customer.entitlements?.map((e) => `${e.name}: ${e.status}`).join(", ") || "None";
 
@@ -281,7 +287,7 @@ export function registerCustomerTools(server: McpServer, client: StablesApiClien
               type: "text",
               text: `Customer created successfully!
 
-Customer ID: ${customer.customerId}
+Customer ID: ${customer.customer_id}
 Email: ${customer.email}
 Type: ${params.customerType}
 ${params.firstName ? `Name: ${params.firstName}${params.middleName ? ` ${params.middleName}` : ""} ${params.lastName || ""}` : ""}
@@ -290,7 +296,7 @@ ${params.phone ? `Phone: ${params.phone}` : ""}
 ${params.nationality ? `Nationality: ${params.nationality}` : ""}
 Entitlements: ${entitlementsList}
 Verification Status: ${verificationStatus}
-Created: ${customer.createdAt}
+Created: ${customer.created_at}
 
 Next step: Use 'get_verification_link' to get a KYC verification link for this customer.`,
             },
@@ -321,8 +327,8 @@ Next step: Use 'get_verification_link' to get a KYC verification link for this c
       try {
         const customer = await client.getCustomer(customerId);
 
-        const verificationStatus = customer.verificationLevels?.[0]?.status || "NOT_STARTED";
-        const isVerified = verificationStatus === "VERIFICATION_APPROVED";
+        const verificationStatus = customer.verification_levels?.[0]?.status || "not_started";
+        const isVerified = verificationStatus === "approved";
         const entitlementsList =
           customer.entitlements?.map((e) => `${e.name}: ${e.status}`).join(", ") || "None";
 
@@ -332,17 +338,17 @@ Next step: Use 'get_verification_link' to get a KYC verification link for this c
               type: "text",
               text: `Customer Details:
 
-Customer ID: ${customer.customerId}
+Customer ID: ${customer.customer_id}
 Email: ${customer.email || "Not set"}
-Type: ${customer.customerType}
-${customer.firstName ? `Name: ${customer.firstName} ${customer.lastName || ""}` : ""}
-${customer.companyName ? `Company: ${customer.companyName}` : ""}
+Type: ${customer.customer_type}
+${customer.first_name ? `Name: ${customer.first_name} ${customer.last_name || ""}` : ""}
+${customer.company_name ? `Company: ${customer.company_name}` : ""}
 ${customer.phone ? `Phone: ${customer.phone}` : ""}
 Entitlements: ${entitlementsList}
 Verification Status: ${verificationStatus}
 Can Transfer: ${isVerified ? "Yes" : "No - needs KYC verification"}
-Created: ${customer.createdAt}
-Updated: ${customer.updatedAt}`,
+Created: ${customer.created_at}
+Updated: ${customer.updated_at}`,
             },
           ],
         };
@@ -378,8 +384,8 @@ Updated: ${customer.updatedAt}`,
 
       const customerList = response.customers
         .map((c) => {
-          const status = c.verificationLevels?.[0]?.status || "NOT_STARTED";
-          return `- ${c.customerId}: ${c.email || "No email"} (${c.customerType}) - ${status}`;
+          const status = c.verification_levels?.[0]?.status || "not_started";
+          return `- ${c.customer_id}: ${c.email || "No email"} (${c.customer_type}) - ${status}`;
         })
         .join("\n");
 
@@ -501,15 +507,18 @@ Share this link with the customer to complete their identity verification.`,
       entitlements,
     }) => {
       try {
-        const updates: Record<string, unknown> = {};
+        // Every field on this endpoint is optional, so camelCase keys were not
+        // rejected — they were stripped, the body parsed to {}, and the call
+        // returned 200 having changed nothing.
+        const updates: UpdateCustomerRequest = {};
         if (email) updates.email = email;
         if (phone) updates.phone = phone;
-        if (firstName) updates.firstName = firstName;
-        if (lastName) updates.lastName = lastName;
-        if (middleName) updates.middleName = middleName;
+        if (firstName) updates.first_name = firstName;
+        if (lastName) updates.last_name = lastName;
+        if (middleName) updates.middle_name = middleName;
         if (dob) updates.dob = dob;
         if (nationality) updates.nationality = nationality;
-        if (companyName) updates.companyName = companyName;
+        if (companyName) updates.company_name = companyName;
         if (entitlements) updates.entitlements = entitlements;
 
         const customer = await client.updateCustomer(customerId, updates);
@@ -518,12 +527,12 @@ Share this link with the customer to complete their identity verification.`,
           content: [
             {
               type: "text",
-              text: `Customer ${customer.customerId} updated successfully.
+              text: `Customer ${customer.customer_id} updated successfully.
 
 Email: ${customer.email}
-${customer.firstName ? `Name: ${customer.firstName} ${customer.lastName || ""}` : ""}
-${customer.companyName ? `Company: ${customer.companyName}` : ""}
-Updated: ${customer.updatedAt}`,
+${customer.first_name ? `Name: ${customer.first_name} ${customer.last_name || ""}` : ""}
+${customer.company_name ? `Company: ${customer.company_name}` : ""}
+Updated: ${customer.updated_at}`,
             },
           ],
         };

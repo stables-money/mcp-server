@@ -10,7 +10,7 @@ MCP (Model Context Protocol) is an open standard that provides a standardized wa
 
 ## Features
 
-This MCP server provides 24 tools across 6 categories:
+This MCP server provides 23 tools across 7 categories:
 
 ### Customer Management
 - `create_customer` - Create individual or business customers
@@ -33,9 +33,10 @@ This MCP server provides 24 tools across 6 categories:
 - `create_virtual_account` - Create virtual bank accounts for fiat deposits
 - `list_virtual_accounts` - List virtual accounts for a customer
 - `update_virtual_account` - Update virtual account settings
-- `deactivate_virtual_account` - Deactivate a virtual account
-- `reactivate_virtual_account` - Reactivate a deactivated virtual account
 - `get_virtual_account_history` - Get activity history for a virtual account
+
+### Payment Methods
+- `validate_payment_method` - Check payout details against a currency's rules before creating a quote or transfer
 
 ### API Keys
 - `create_api_key` - Create a new API key
@@ -216,7 +217,8 @@ stables-mcp-server/
 │       ├── transfers.ts      # Transfer tools (3)
 │       ├── virtual-accounts.ts # Virtual account tools (6)
 │       ├── api-keys.ts       # API key tools (4)
-│       └── webhooks.ts       # Webhook tools (3)
+│       ├── webhooks.ts       # Webhook tools (3)
+│       └── payment-methods.ts # Payment method validation (1)
 ├── package.json
 ├── tsconfig.json
 ├── vitest.config.ts
@@ -372,22 +374,6 @@ Update virtual account settings.
 | customerId | string | Yes | Customer ID |
 | virtualAccountId | string | Yes | Virtual account ID |
 | depositHandlingMode | string | Yes | New deposit handling mode |
-
-#### deactivate_virtual_account
-Deactivate a virtual account to prevent new deposits.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| customerId | string | Yes | Customer ID |
-| virtualAccountId | string | Yes | Virtual account ID |
-
-#### reactivate_virtual_account
-Reactivate a previously deactivated virtual account.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| customerId | string | Yes | Customer ID |
-| virtualAccountId | string | Yes | Virtual account ID |
 
 #### get_virtual_account_history
 Get activity history for a virtual account.

@@ -21,34 +21,34 @@ export class StablesApiError extends Error {
 
 // ============ CUSTOMER TYPES ============
 
-export type CustomerType = "CUSTOMER_TYPE_INDIVIDUAL" | "CUSTOMER_TYPE_BUSINESS";
+export type CustomerType = "individual" | "business";
 
-export type VerificationStatus =
-  | "VERIFICATION_IN_PROGRESS"
-  | "VERIFICATION_APPROVED"
-  | "VERIFICATION_REJECTED";
+export type VerificationStatus = "in_progress" | "approved" | "rejected" | "not_started";
 
 export type VerificationLevel =
-  | "KYC_LEVEL_0"
-  | "KYC_LEVEL_1"
-  | "KYC_LEVEL_2"
-  | "BASE_BUSINESS"
-  | "INDIVIDUAL_BASE"
-  | "BUSINESS_BASE"
-  | "INDIVIDUAL_ENHANCED";
+  | "individual_base"
+  | "individual_enhanced"
+  | "business_base"
+  | "base_business";
 
 export interface VerificationLevelResponse {
   level: VerificationLevel;
   status: VerificationStatus;
+  sub_status?: string[];
+  details?: unknown[];
 }
+
+/** The five feature entitlements the API accepts. */
+export type EntitlementId =
+  | "base_payout"
+  | "virtual_account"
+  | "eur_virtual_account"
+  | "usd_virtual_account"
+  | "aed_local";
 
 export interface Entitlement {
   name: string;
-  status:
-    | "ENTITLEMENT_STATUS_SUBMITTED"
-    | "ENTITLEMENT_STATUS_IN_PROGRESS"
-    | "ENTITLEMENT_STATUS_APPROVED"
-    | "ENTITLEMENT_STATUS_REJECTED";
+  status: "submitted" | "pending" | "in_progress" | "approved" | "rejected";
 }
 
 export interface CustomerAddress {
@@ -56,80 +56,102 @@ export interface CustomerAddress {
   line2?: string;
   city: string;
   state?: string;
-  postalCode?: string;
+  postal_code?: string;
   country: string;
 }
 
 export interface Customer {
-  customerId: string;
-  externalCustomerId: string;
-  customerType: CustomerType;
+  customer_id: string;
+  external_customer_id?: string;
+  customer_type: CustomerType;
   email: string;
   phone?: string;
-  firstName?: string;
-  lastName?: string;
-  companyName?: string;
+  first_name?: string;
+  last_name?: string;
+  company_name?: string;
+  status?: string;
+  compliance_lock?: boolean;
   entitlements?: Entitlement[];
-  createdAt: string;
-  updatedAt: string;
-  verificationLevels: VerificationLevelResponse[];
+  created_at: string;
+  updated_at: string;
+  verification_levels?: VerificationLevelResponse[];
   metadata?: Record<string, string>;
 }
 
 export interface CreateIndividualCustomerRequest {
-  externalCustomerId: string;
-  customerType: "CUSTOMER_TYPE_INDIVIDUAL";
-  email?: string;
-  firstName?: string;
-  lastName?: string;
-  middleName?: string;
+  customer_type: "individual";
+  /** Required — the API rejects a customer without one. */
+  email: string;
+  external_customer_id?: string;
+  first_name?: string;
+  last_name?: string;
+  middle_name?: string;
   phone?: string;
   dob?: string;
   nationality?: string;
+  tax_id_number?: string;
   address?: CustomerAddress;
-  entitlements?: string[];
+  entitlements?: EntitlementId[];
   metadata?: Record<string, string>;
 }
 
 export interface CreateBusinessCustomerRequest {
-  externalCustomerId: string;
-  customerType: "CUSTOMER_TYPE_BUSINESS";
-  email?: string;
+  customer_type: "business";
+  email: string;
+  company_name: string;
+  external_customer_id?: string;
   phone?: string;
-  companyName: string;
   country?: string;
-  registrationNumber?: string;
-  legalAddress?: CustomerAddress;
-  incorporatedOn?: string;
+  registration_number?: string;
+  legal_address?: CustomerAddress;
+  postal_address?: CustomerAddress;
+  incorporated_on?: string;
   type?: string;
-  taxId?: string;
-  registrationLocation?: string;
+  tax_id?: string;
+  registration_location?: string;
   website?: string;
-  postalAddress?: CustomerAddress;
-  alternativeNames?: string[];
-  describeBusiness?: string;
-  conductMoneyServices?: boolean;
-  describeMoneyServices?: string;
-  describeComplianceControls?: string;
-  accountPurpose?: string;
-  accountPurposeOther?: string;
-  isYourBusinessADao?: boolean;
-  industrySelection?: string;
-  mainSourceOfFunds?: string;
-  sourceOfFunds?: string;
-  sourceOfFundsDescription?: string;
-  expectedAnnualRevenue?: string;
-  expectedMonthlyPayments?: string;
-  doesYourBusinessEngageInHighRiskActivities?: "yes" | "no";
-  highRiskActivities?: string[];
-  operateInProhibitedCountry?: boolean;
-  acceptTerms?: boolean;
-  howDidYouComeAcrossStables?: string;
-  entitlements?: string[];
+  alternative_names?: string[];
+  describe_business?: string;
+  conduct_money_services?: boolean;
+  describe_money_services?: string;
+  describe_compliance_controls?: string;
+  account_purpose?: string;
+  account_purpose_other?: string;
+  is_your_business_a_dao?: boolean;
+  industry_selection?: string;
+  main_source_of_funds?: string;
+  source_of_funds?: string;
+  source_of_funds_description?: string;
+  expected_annual_revenue?: string;
+  expected_monthly_payments?: string;
+  does_your_business_engage_in_high_risk_activities?: "yes" | "no";
+  high_risk_activities?: string[];
+  operate_in_prohibited_country?: boolean;
+  accept_terms?: boolean;
+  how_did_you_come_across_stables?: string;
+  entitlements?: EntitlementId[];
   metadata?: Record<string, string>;
 }
 
 export type CreateCustomerRequest = CreateIndividualCustomerRequest | CreateBusinessCustomerRequest;
+
+/**
+ * Every field optional, so an unknown key is not an error — it is simply
+ * dropped. Sending camelCase here parsed to an empty object and returned 200
+ * having changed nothing.
+ */
+export interface UpdateCustomerRequest {
+  email?: string;
+  phone?: string;
+  first_name?: string;
+  last_name?: string;
+  middle_name?: string;
+  dob?: string;
+  nationality?: string;
+  company_name?: string;
+  entitlements?: EntitlementId[];
+  metadata?: Record<string, string>;
+}
 
 export interface ListCustomersResponse {
   customers: Customer[];
@@ -219,6 +241,17 @@ export interface BankTransferDestination {
   cnaps?: string;
   name_in_local_language?: string;
   national_identification_number?: string;
+}
+
+export interface PaymentMethodValidationError {
+  field?: string;
+  message: string;
+  code: "UNSUPPORTED_CURRENCY" | "UNSUPPORTED_PAYMENT_METHOD" | "INVALID_FIELDS";
+}
+
+export interface ValidatePaymentMethodResponse {
+  valid: boolean;
+  errors?: PaymentMethodValidationError[];
 }
 
 export interface CryptoTransferDestination {
@@ -611,7 +644,7 @@ export class StablesApiClient {
     });
   }
 
-  async updateCustomer(customerId: string, data: Record<string, unknown>): Promise<Customer> {
+  async updateCustomer(customerId: string, data: UpdateCustomerRequest): Promise<Customer> {
     return this.requestWithRetry<Customer>(`/api/v1/customer/${customerId}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -812,6 +845,24 @@ export class StablesApiClient {
   }
 
   // ============ WEBHOOKS ============
+
+  /**
+   * Check payout details against the per-currency rules without creating
+   * anything. Always answers 200 — the outcome is in the body — so an agent can
+   * discover what a corridor demands before spending a short-lived quote.
+   */
+  async validatePaymentMethod(
+    network: string,
+    destination: BankTransferDestination
+  ): Promise<ValidatePaymentMethodResponse> {
+    return this.requestWithRetry<ValidatePaymentMethodResponse>(
+      "/api/v1/payment-methods/validate",
+      {
+        method: "POST",
+        body: JSON.stringify({ network, destination }),
+      }
+    );
+  }
 
   async listWebhooks(): Promise<{ subscriptions: WebhookSubscription[] }> {
     return this.requestWithRetry<{ subscriptions: WebhookSubscription[] }>("/api/v1/webhooks");
