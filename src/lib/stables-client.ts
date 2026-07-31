@@ -837,8 +837,7 @@ export function createStablesClient(): StablesApiClient {
 
   // An explicit URL always wins: it is the only way to reach staging, dev or a
   // local deployment, and the caller stating an environment outranks inference.
-  const baseUrl =
-    process.env.STABLES_API_URL || apiUrlForKey(apiKey) || PRODUCTION_API_URL;
+  const baseUrl = process.env.STABLES_API_URL || apiUrlForKey(apiKey) || PRODUCTION_API_URL;
 
   if (!baseUrl.startsWith("https://")) {
     throw new Error("STABLES_API_URL must use HTTPS");
