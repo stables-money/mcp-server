@@ -1,99 +1,131 @@
 /**
  * Quote Tools for Stables MCP Server
- * Synced with OpenAPI spec from https://api.stables.money/docs
+ *
+ * Mirrors POST /api/v1/quotes and GET /api/v1/quotes/:id as of 2026-07-30. The
+ * request takes `source`/`destination` (was `from`/`to`), the response is the
+ * quote itself with no `{ quote }` wrapper, and `paymentMethodType` is gone —
+ * the payment network is now `destination.network`.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { StablesApiClient } from "../lib/stables-client.js";
+import { StablesApiClient, Quote } from "../lib/stables-client.js";
+
+const LIVE_NETWORKS = [
+  "arbitrum",
+  "avalanche",
+  "base",
+  "ethereum",
+  "optimism",
+  "polygon",
+  "solana",
+  "tron",
+] as const;
+
+function secondsUntil(iso: string): number {
+  return Math.max(0, Math.floor((new Date(iso).getTime() - Date.now()) / 1000));
+}
+
+function describeAmount(side: { amount: string; currency: string; network?: string }): string {
+  return `${side.amount} ${side.currency}${side.network ? ` (${side.network})` : ""}`;
+}
+
+function feeLines(quote: Quote): string {
+  const fees = quote.fees;
+  let out = `Total Fees: ${fees.total_fee.amount} ${fees.total_fee.currency}`;
+  if (fees.fx_fee) out += `\n  FX Fee: ${fees.fx_fee.amount} ${fees.fx_fee.currency}`;
+  if (fees.platform_fee)
+    out += `\n  Platform Fee: ${fees.platform_fee.amount} ${fees.platform_fee.currency}`;
+  if (fees.payment_method_fee)
+    out += `\n  Payment Method Fee: ${fees.payment_method_fee.amount} ${fees.payment_method_fee.currency}`;
+  if (fees.network_fee)
+    out += `\n  Network Fee: ${fees.network_fee.amount} ${fees.network_fee.currency}`;
+  if (fees.integrator_fee)
+    out += `\n  Integrator Fee: ${fees.integrator_fee.amount} ${fees.integrator_fee.currency}`;
+  return out;
+}
 
 export function registerQuoteTools(server: McpServer, client: StablesApiClient) {
   // Create Quote
   server.tool(
     "create_quote",
-    "Get a quote for currency exchange. Quotes show the exchange rate, fees, and amount the customer will receive. Quotes expire after 30 seconds. Currently supports crypto → fiat (off-ramp) with more types coming soon.",
+    "Get a quote for a currency exchange: the rate, the fees, and what the customer receives. Quotes are short-lived, so create one immediately before the transfer. " +
+      "Off-ramp converts a stablecoin to fiat (source network required, destination country required); on-ramp converts fiat to a stablecoin (destination address required). " +
+      "Set preview to price without committing.",
     {
-      customerId: z
+      sourceCurrency: z
+        .string()
+        .describe("Source currency: a stablecoin for off-ramp (e.g. 'USDT'), fiat for on-ramp"),
+      sourceAmount: z.string().describe("Amount to convert, in major units (e.g. '125.75')"),
+      sourceNetwork: z
+        .enum(LIVE_NETWORKS)
+        .optional()
+        .describe("Blockchain network of the source. Required for off-ramp, omitted for on-ramp"),
+      destinationCurrency: z
+        .string()
+        .describe("Destination currency: fiat for off-ramp (e.g. 'EUR'), a stablecoin for on-ramp"),
+      destinationCountry: z
+        .string()
+        .optional()
+        .describe("Destination country, ISO 2-letter. Required for off-ramp"),
+      destinationNetwork: z
         .string()
         .optional()
         .describe(
-          "The customer ID to associate this quote with. Required if the quote will be used to create a transfer."
+          "Off-ramp: payment network, 'swift' or 'bank'. On-ramp: blockchain network. Replaces the old paymentMethodType"
         ),
-      fromCurrency: z.enum(["USDC", "USDT"]).describe("Source cryptocurrency (USDC or USDT)"),
-      fromAmount: z.string().describe("Amount to convert (e.g., '125.75')"),
-      fromNetwork: z
-        .enum(["ethereum", "polygon"])
-        .describe("Blockchain network for the source crypto"),
-      toCurrency: z.string().describe("Destination currency code (e.g., 'EUR', 'USD', 'GBP')"),
-      toCountry: z.string().describe("Destination country code (e.g., 'GR', 'US', 'GB')"),
-      paymentMethodType: z
-        .enum(["SWIFT", "LOCAL"])
-        .describe(
-          "Payment method for fiat payouts - 'SWIFT' for international, 'LOCAL' for domestic rails"
-        ),
+      destinationAddress: z
+        .string()
+        .optional()
+        .describe("Destination wallet address. Required for on-ramp"),
+      preview: z
+        .boolean()
+        .optional()
+        .describe("Price the quote without persisting it — use to show an estimate"),
+      metadata: z.record(z.string()).optional().describe("Optional metadata"),
     },
-    async ({
-      customerId,
-      fromCurrency,
-      fromAmount,
-      fromNetwork,
-      toCurrency,
-      toCountry,
-      paymentMethodType,
-    }) => {
+    async (input) => {
       try {
-        const response = await client.createQuote({
-          customerId,
-          from: {
-            currency: fromCurrency,
-            amount: fromAmount,
-            network: fromNetwork,
+        const quote = await client.createQuote({
+          source: {
+            currency: input.sourceCurrency,
+            amount: input.sourceAmount,
+            ...(input.sourceNetwork && { network: input.sourceNetwork }),
           },
-          to: {
-            currency: toCurrency,
-            country: toCountry,
-            paymentMethodType,
+          destination: {
+            currency: input.destinationCurrency,
+            ...(input.destinationCountry && { country: input.destinationCountry }),
+            ...(input.destinationNetwork && { network: input.destinationNetwork }),
+            ...(input.destinationAddress && { address: input.destinationAddress }),
           },
+          ...(input.preview !== undefined && { preview: input.preview }),
+          ...(input.metadata && { metadata: input.metadata }),
         });
-
-        const quote = response.quote;
-        const expiresIn = Math.max(
-          0,
-          Math.floor((new Date(quote.expiresAt).getTime() - Date.now()) / 1000)
-        );
-
-        let feeDetails = `Total Fees: ${quote.fees.totalFee.amount} ${quote.fees.totalFee.currency}`;
-        if (quote.fees.fxFee)
-          feeDetails += `\n  FX Fee: ${quote.fees.fxFee.amount} ${quote.fees.fxFee.currency}`;
-        if (quote.fees.platformFee)
-          feeDetails += `\n  Platform Fee: ${quote.fees.platformFee.amount} ${quote.fees.platformFee.currency}`;
-        if (quote.fees.paymentMethodFee)
-          feeDetails += `\n  Payment Method Fee: ${quote.fees.paymentMethodFee.amount} ${quote.fees.paymentMethodFee.currency}`;
-        if (quote.fees.networkFee)
-          feeDetails += `\n  Network Fee: ${quote.fees.networkFee.amount} ${quote.fees.networkFee.currency}`;
-        if (quote.fees.integratorFee)
-          feeDetails += `\n  Integrator Fee: ${quote.fees.integratorFee.amount} ${quote.fees.integratorFee.currency}`;
 
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: `Quote created successfully!
 
-Quote ID: ${quote.quoteId}
+Quote ID: ${quote.quote_id}
 Status: ${quote.status}
 
 Converting:
-  From: ${quote.from.amount} ${quote.from.currency}${quote.from.network ? ` (${quote.from.network})` : ""}
-  To: ${quote.to.amount} ${quote.to.currency} via ${quote.to.paymentMethodType}
+  From: ${describeAmount(quote.source)}
+  To: ${describeAmount(quote.destination)}
 
-Exchange Rate: ${quote.exchangeRate}
-${feeDetails}
+Exchange Rate: ${quote.exchange_rate}
+${feeLines(quote)}
 
-Expires in: ${expiresIn} seconds
-Expires at: ${quote.expiresAt}
+Expires in: ${secondsUntil(quote.expires_at)} seconds
+Expires at: ${quote.expires_at}
 
-To execute this quote, use 'create_transfer' with this quoteId and include bank details for off-ramp transfers.`,
+${
+  quote.status === "preview"
+    ? "This is a preview and was not persisted. Create a real quote before transferring."
+    : "To execute it, call 'create_transfer' with this quote ID and the payout destination."
+}`,
             },
           ],
         };
@@ -101,7 +133,7 @@ To execute this quote, use 'create_transfer' with this quoteId and include bank 
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: `Failed to create quote: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
@@ -120,47 +152,37 @@ To execute this quote, use 'create_transfer' with this quoteId and include bank 
     },
     async ({ quoteId }) => {
       try {
-        const response = await client.getQuote(quoteId);
-        const quote = response.quote;
+        const quote = await client.getQuote(quoteId);
 
-        const isExpired =
-          quote.status === "QUOTE_STATUS_EXPIRED" || new Date(quote.expiresAt) < new Date();
-        const isUsed = quote.status === "QUOTE_STATUS_USED";
-        const isCancelled = quote.status === "QUOTE_STATUS_CANCELLED";
-
-        let statusMessage = "";
-        if (isUsed) {
+        let statusMessage: string;
+        if (quote.status === "used") {
           statusMessage = "This quote has already been used to create a transfer.";
-        } else if (isCancelled) {
+        } else if (quote.status === "cancelled") {
           statusMessage = "This quote has been cancelled.";
-        } else if (isExpired) {
+        } else if (quote.status === "expired" || new Date(quote.expires_at) < new Date()) {
           statusMessage = "This quote has expired. Create a new quote to proceed.";
         } else {
-          const expiresIn = Math.max(
-            0,
-            Math.floor((new Date(quote.expiresAt).getTime() - Date.now()) / 1000)
-          );
-          statusMessage = `This quote is active and expires in ${expiresIn} seconds.`;
+          statusMessage = `This quote is active and expires in ${secondsUntil(quote.expires_at)} seconds.`;
         }
 
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: `Quote Details:
 
-Quote ID: ${quote.quoteId}
+Quote ID: ${quote.quote_id}
 Status: ${quote.status}
 
 Converting:
-  From: ${quote.from.amount} ${quote.from.currency}${quote.from.network ? ` (${quote.from.network})` : ""}
-  To: ${quote.to.amount} ${quote.to.currency} via ${quote.to.paymentMethodType}
+  From: ${describeAmount(quote.source)}
+  To: ${describeAmount(quote.destination)}
 
-Exchange Rate: ${quote.exchangeRate}
-Total Fees: ${quote.fees.totalFee.amount} ${quote.fees.totalFee.currency}
+Exchange Rate: ${quote.exchange_rate}
+Total Fees: ${quote.fees.total_fee.amount} ${quote.fees.total_fee.currency}
 
-Created: ${quote.createdAt}
-Expires: ${quote.expiresAt}
+Created: ${quote.created_at}
+Expires: ${quote.expires_at}
 
 ${statusMessage}`,
             },
@@ -170,7 +192,7 @@ ${statusMessage}`,
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: `Failed to get quote: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],

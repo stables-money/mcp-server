@@ -21,34 +21,34 @@ export class StablesApiError extends Error {
 
 // ============ CUSTOMER TYPES ============
 
-export type CustomerType = "CUSTOMER_TYPE_INDIVIDUAL" | "CUSTOMER_TYPE_BUSINESS";
+export type CustomerType = "individual" | "business";
 
-export type VerificationStatus =
-  | "VERIFICATION_IN_PROGRESS"
-  | "VERIFICATION_APPROVED"
-  | "VERIFICATION_REJECTED";
+export type VerificationStatus = "in_progress" | "approved" | "rejected" | "not_started";
 
 export type VerificationLevel =
-  | "KYC_LEVEL_0"
-  | "KYC_LEVEL_1"
-  | "KYC_LEVEL_2"
-  | "BASE_BUSINESS"
-  | "INDIVIDUAL_BASE"
-  | "BUSINESS_BASE"
-  | "INDIVIDUAL_ENHANCED";
+  | "individual_base"
+  | "individual_enhanced"
+  | "business_base"
+  | "base_business";
 
 export interface VerificationLevelResponse {
   level: VerificationLevel;
   status: VerificationStatus;
+  sub_status?: string[];
+  details?: unknown[];
 }
+
+/** The five feature entitlements the API accepts. */
+export type EntitlementId =
+  | "base_payout"
+  | "virtual_account"
+  | "eur_virtual_account"
+  | "usd_virtual_account"
+  | "aed_local";
 
 export interface Entitlement {
   name: string;
-  status:
-    | "ENTITLEMENT_STATUS_SUBMITTED"
-    | "ENTITLEMENT_STATUS_IN_PROGRESS"
-    | "ENTITLEMENT_STATUS_APPROVED"
-    | "ENTITLEMENT_STATUS_REJECTED";
+  status: "submitted" | "pending" | "in_progress" | "approved" | "rejected";
 }
 
 export interface CustomerAddress {
@@ -56,80 +56,102 @@ export interface CustomerAddress {
   line2?: string;
   city: string;
   state?: string;
-  postalCode?: string;
+  postal_code?: string;
   country: string;
 }
 
 export interface Customer {
-  customerId: string;
-  externalCustomerId: string;
-  customerType: CustomerType;
+  customer_id: string;
+  external_customer_id?: string;
+  customer_type: CustomerType;
   email: string;
   phone?: string;
-  firstName?: string;
-  lastName?: string;
-  companyName?: string;
+  first_name?: string;
+  last_name?: string;
+  company_name?: string;
+  status?: string;
+  compliance_lock?: boolean;
   entitlements?: Entitlement[];
-  createdAt: string;
-  updatedAt: string;
-  verificationLevels: VerificationLevelResponse[];
+  created_at: string;
+  updated_at: string;
+  verification_levels?: VerificationLevelResponse[];
   metadata?: Record<string, string>;
 }
 
 export interface CreateIndividualCustomerRequest {
-  externalCustomerId: string;
-  customerType: "CUSTOMER_TYPE_INDIVIDUAL";
-  email?: string;
-  firstName?: string;
-  lastName?: string;
-  middleName?: string;
+  customer_type: "individual";
+  /** Required — the API rejects a customer without one. */
+  email: string;
+  external_customer_id?: string;
+  first_name?: string;
+  last_name?: string;
+  middle_name?: string;
   phone?: string;
   dob?: string;
   nationality?: string;
+  tax_id_number?: string;
   address?: CustomerAddress;
-  entitlements?: string[];
+  entitlements?: EntitlementId[];
   metadata?: Record<string, string>;
 }
 
 export interface CreateBusinessCustomerRequest {
-  externalCustomerId: string;
-  customerType: "CUSTOMER_TYPE_BUSINESS";
-  email?: string;
+  customer_type: "business";
+  email: string;
+  company_name: string;
+  external_customer_id?: string;
   phone?: string;
-  companyName: string;
   country?: string;
-  registrationNumber?: string;
-  legalAddress?: CustomerAddress;
-  incorporatedOn?: string;
+  registration_number?: string;
+  legal_address?: CustomerAddress;
+  postal_address?: CustomerAddress;
+  incorporated_on?: string;
   type?: string;
-  taxId?: string;
-  registrationLocation?: string;
+  tax_id?: string;
+  registration_location?: string;
   website?: string;
-  postalAddress?: CustomerAddress;
-  alternativeNames?: string[];
-  describeBusiness?: string;
-  conductMoneyServices?: boolean;
-  describeMoneyServices?: string;
-  describeComplianceControls?: string;
-  accountPurpose?: string;
-  accountPurposeOther?: string;
-  isYourBusinessADao?: boolean;
-  industrySelection?: string;
-  mainSourceOfFunds?: string;
-  sourceOfFunds?: string;
-  sourceOfFundsDescription?: string;
-  expectedAnnualRevenue?: string;
-  expectedMonthlyPayments?: string;
-  doesYourBusinessEngageInHighRiskActivities?: "yes" | "no";
-  highRiskActivities?: string[];
-  operateInProhibitedCountry?: boolean;
-  acceptTerms?: boolean;
-  howDidYouComeAcrossStables?: string;
-  entitlements?: string[];
+  alternative_names?: string[];
+  describe_business?: string;
+  conduct_money_services?: boolean;
+  describe_money_services?: string;
+  describe_compliance_controls?: string;
+  account_purpose?: string;
+  account_purpose_other?: string;
+  is_your_business_a_dao?: boolean;
+  industry_selection?: string;
+  main_source_of_funds?: string;
+  source_of_funds?: string;
+  source_of_funds_description?: string;
+  expected_annual_revenue?: string;
+  expected_monthly_payments?: string;
+  does_your_business_engage_in_high_risk_activities?: "yes" | "no";
+  high_risk_activities?: string[];
+  operate_in_prohibited_country?: boolean;
+  accept_terms?: boolean;
+  how_did_you_come_across_stables?: string;
+  entitlements?: EntitlementId[];
   metadata?: Record<string, string>;
 }
 
 export type CreateCustomerRequest = CreateIndividualCustomerRequest | CreateBusinessCustomerRequest;
+
+/**
+ * Every field optional, so an unknown key is not an error — it is simply
+ * dropped. Sending camelCase here parsed to an empty object and returned 200
+ * having changed nothing.
+ */
+export interface UpdateCustomerRequest {
+  email?: string;
+  phone?: string;
+  first_name?: string;
+  last_name?: string;
+  middle_name?: string;
+  dob?: string;
+  nationality?: string;
+  company_name?: string;
+  entitlements?: EntitlementId[];
+  metadata?: Record<string, string>;
+}
 
 export interface ListCustomersResponse {
   customers: Customer[];
@@ -156,79 +178,129 @@ export interface GenerateVerificationLinkResponse {
 
 // ============ TRANSFER TYPES ============
 
-export type TransferType = "TRANSFER_TYPE_OFFRAMP" | "TRANSFER_TYPE_ONRAMP";
+// The wire is snake_case for transfers, customers, quotes and virtual accounts;
+// only api-keys and webhooks are camelCase. Types below mirror the wire exactly
+// so nothing has to be remembered at the call site.
+
+export type TransferType = "offramp" | "onramp";
 
 export type TransferStatus =
-  | "CREATED"
-  | "COMPLIANCE_HOLD"
-  | "AWAITING_FUNDS_COLLECTION"
-  | "FUNDS_COLLECTED"
-  | "PAYMENT_SUBMITTED"
-  | "PAYMENT_PROCESSED"
-  | "COMPLETED"
-  | "FAILED"
-  | "CANCELLED"
-  | "EXPIRED";
+  | "created"
+  | "compliance_hold"
+  | "awaiting_funds_collection"
+  | "funds_collected"
+  | "in_progress"
+  | "payment_submitted"
+  | "payment_processed"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "expired"
+  | "unknown";
 
-export interface BankCodes {
-  swiftCode?: string;
-  bicCode?: string;
-  ifscCode?: string;
-  abaCode?: string;
-  sortCode?: string;
-  branchCode?: string;
-  bsbCode?: string;
-  bankCode?: string;
-  cnaps?: string;
+/** ISO 3166-1 alpha-2, lowercase, per AddressApiSchema. */
+export interface BeneficiaryAddress {
+  street: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
 }
 
-export interface BankTransferDetails {
-  accountHolderName: string;
-  accountNumber?: string;
-  iban?: string;
-  bankName: string;
-  bankCountry: string;
+/**
+ * Bank payout destination. Bank codes are flat here — the nested `bankCodes`
+ * object the API used to take is gone.
+ */
+export interface BankTransferDestination {
+  type: "bank";
+  account_holder_name: string;
+  bank_name: string;
+  bank_country: string;
   currency: string;
-  accountType?: "savings" | "checking" | "payment";
-  branchName?: string;
-  bankCodes?: BankCodes;
+  /**
+   * Required for payouts in AED, CAD, EUR, GBP, MXN and USD, together with
+   * `address`, and `date_of_birth` when this is "individual".
+   */
+  recipient_type?: "individual" | "business";
+  date_of_birth?: string;
+  address?: BeneficiaryAddress;
+  account_number?: string;
+  iban?: string;
+  pay_id?: string;
+  pay_id_type?: "email" | "phone" | "abn" | "org_id";
+  account_type?: "savings" | "checking" | "payment";
+  branch_name?: string;
+  swift_code?: string;
+  bic_code?: string;
+  ifsc_code?: string;
+  aba_code?: string;
+  sort_code?: string;
+  branch_code?: string;
+  bsb_code?: string;
+  bank_code?: string;
+  cnaps?: string;
+  name_in_local_language?: string;
+  national_identification_number?: string;
 }
 
-export interface PaymentMethod {
-  bankTransfer: BankTransferDetails;
+export interface PaymentMethodValidationError {
+  field?: string;
+  message: string;
+  code: "UNSUPPORTED_CURRENCY" | "UNSUPPORTED_PAYMENT_METHOD" | "INVALID_FIELDS";
 }
 
-export interface CollectionInstructions {
-  walletAddress: string;
+export interface ValidatePaymentMethodResponse {
+  valid: boolean;
+  errors?: PaymentMethodValidationError[];
+}
+
+export interface CryptoTransferDestination {
+  type: "crypto";
   currency: string;
   network: string;
-  amount: string;
+  address: string;
+}
+
+export type TransferDestination = BankTransferDestination | CryptoTransferDestination;
+
+/** Where the customer sends funds for an offramp. Was `collectionInstructions`. */
+export interface SourceDepositInstructions {
+  wallet_address?: string;
+  currency?: string;
+  network?: string;
+  amount?: string;
+  [key: string]: unknown;
 }
 
 export interface Transfer {
   id: string;
-  tenantId: string;
-  customerId: string;
-  quoteId: string;
+  tenant_id: string;
+  customer_id: string;
+  quote_id: string;
   type: TransferType;
   status: TransferStatus;
-  createdAt: string;
-  updatedAt: string;
-  collectionInstructions?: CollectionInstructions;
+  origin?: "api" | "otc";
+  created_at: string;
+  updated_at: string;
+  source_deposit_instructions?: SourceDepositInstructions;
+  destination?: TransferDestination;
+  fees?: Record<string, unknown>;
+  exchange_rate?: string;
   metadata?: Record<string, string>;
 }
 
 export interface CreateTransferRequest {
-  customerId: string;
-  quoteId: string;
-  paymentMethod?: PaymentMethod;
+  customer_id: string;
+  quote_id: string;
+  destination: TransferDestination;
+  purpose_code?: string;
   metadata?: Record<string, string>;
 }
 
 export interface ListTransfersResponse {
   transfers: Transfer[];
   page: {
-    nextPageToken: string;
+    next_page_token: string;
     total: number;
   };
 }
@@ -315,13 +387,21 @@ export interface VirtualAccountHistoryEvent {
 
 // ============ QUOTE TYPES ============
 
-export type QuoteStatus =
-  | "QUOTE_STATUS_ACTIVE"
-  | "QUOTE_STATUS_EXPIRED"
-  | "QUOTE_STATUS_USED"
-  | "QUOTE_STATUS_CANCELLED";
-export type PaymentMethodType = "SWIFT" | "LOCAL";
-export type QuoteNetwork = "ethereum" | "polygon";
+export type QuoteStatus = "active" | "expired" | "used" | "cancelled" | "preview";
+
+/**
+ * Live blockchain networks. The client used to allow only ethereum and polygon,
+ * which blocked six networks the platform supports.
+ */
+export type QuoteNetwork =
+  | "arbitrum"
+  | "avalanche"
+  | "base"
+  | "ethereum"
+  | "optimism"
+  | "polygon"
+  | "solana"
+  | "tron";
 
 export interface CurrencyAmount {
   currency: string;
@@ -330,50 +410,53 @@ export interface CurrencyAmount {
 }
 
 export interface FeeBreakdown {
-  fxFee: CurrencyAmount;
-  integratorFee: CurrencyAmount;
-  platformFee: CurrencyAmount;
-  paymentMethodFee: CurrencyAmount;
-  networkFee?: CurrencyAmount;
-  totalFee: CurrencyAmount;
+  fx_fee?: CurrencyAmount;
+  integrator_fee?: CurrencyAmount;
+  platform_fee?: CurrencyAmount;
+  payment_method_fee?: CurrencyAmount;
+  network_fee?: CurrencyAmount;
+  total_fee: CurrencyAmount;
 }
 
 export interface Quote {
-  quoteId: string;
-  from: CurrencyAmount;
-  to: {
-    currency: string;
-    amount: string;
-    network?: string;
-    paymentMethodType: PaymentMethodType;
-  };
+  quote_id: string;
+  source: CurrencyAmount;
+  destination: CurrencyAmount;
   fees: FeeBreakdown;
-  exchangeRate: number;
-  expiresAt: string;
-  createdAt: string;
+  exchange_rate: number;
+  expires_at: string;
+  created_at: string;
   status: QuoteStatus;
   metadata?: Record<string, string>;
 }
 
 export interface CreateQuoteRequest {
-  customerId?: string;
-  from: {
+  source: {
     currency: string;
-    network: QuoteNetwork;
+    /** Required for offramp (crypto source); omitted for onramp (fiat source). */
+    network?: string;
     amount: string;
   };
-  to: {
+  destination: {
     currency: string;
-    country: string;
-    network?: QuoteNetwork;
-    paymentMethodType: PaymentMethodType;
+    /** Required for offramp. */
+    country?: string;
+    /** Offramp: payment network (swift/bank). Onramp: blockchain network. */
+    network?: string;
+    /** Required for onramp. */
+    address?: string;
   };
+  /** Price without persisting the quote. Returns status "preview". */
+  preview?: boolean;
   metadata?: Record<string, string>;
 }
 
-export interface CreateQuoteResponse {
-  quote: Quote;
-}
+/**
+ * The quote endpoints return the quote directly. They used to wrap it in
+ * `{ quote }`, and reading the wrapper gave undefined and then a TypeError on
+ * the first field access.
+ */
+export type CreateQuoteResponse = Quote;
 
 // ============ API KEY TYPES ============
 
@@ -561,7 +644,7 @@ export class StablesApiClient {
     });
   }
 
-  async updateCustomer(customerId: string, data: Record<string, unknown>): Promise<Customer> {
+  async updateCustomer(customerId: string, data: UpdateCustomerRequest): Promise<Customer> {
     return this.requestWithRetry<Customer>(`/api/v1/customer/${customerId}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -649,31 +732,9 @@ export class StablesApiClient {
     );
   }
 
-  async deactivateVirtualAccount(
-    customerId: string,
-    virtualAccountId: string
-  ): Promise<VirtualAccount> {
-    return this.requestWithRetry<VirtualAccount>(
-      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/deactivate`,
-      {
-        method: "POST",
-        headers: { "idempotency-key": this.generateIdempotencyKey() },
-      }
-    );
-  }
-
-  async reactivateVirtualAccount(
-    customerId: string,
-    virtualAccountId: string
-  ): Promise<VirtualAccount> {
-    return this.requestWithRetry<VirtualAccount>(
-      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/reactivate`,
-      {
-        method: "POST",
-        headers: { "idempotency-key": this.generateIdempotencyKey() },
-      }
-    );
-  }
+  // deactivate/reactivate are deliberately absent: those routes exist only on
+  // the dashboard surface, which needs a dashboard session, so an API key gets
+  // a 404. There is nothing on /api/v1 to mirror.
 
   async getVirtualAccountHistory(
     customerId: string,
@@ -706,12 +767,15 @@ export class StablesApiClient {
     pageSize?: number;
     pageToken?: string;
   }): Promise<ListTransfersResponse> {
+    // Query keys are snake_case. Sending camelCase did not error — the unknown
+    // keys were simply dropped, so the customer filter and paging silently did
+    // nothing and every call returned page one.
     const searchParams = new URLSearchParams();
     if (params?.status) searchParams.set("status", params.status);
     if (params?.type) searchParams.set("type", params.type);
-    if (params?.customerId) searchParams.set("customerId", params.customerId);
-    if (params?.pageSize) searchParams.set("pageSize", params.pageSize.toString());
-    if (params?.pageToken) searchParams.set("pageToken", params.pageToken);
+    if (params?.customerId) searchParams.set("customer_id", params.customerId);
+    if (params?.pageSize) searchParams.set("page_size", params.pageSize.toString());
+    if (params?.pageToken) searchParams.set("page_token", params.pageToken);
 
     const query = searchParams.toString();
     return this.requestWithRetry<ListTransfersResponse>(
@@ -741,8 +805,8 @@ export class StablesApiClient {
     });
   }
 
-  async getQuote(quoteId: string): Promise<{ quote: Quote }> {
-    return this.requestWithRetry<{ quote: Quote }>(`/api/v1/quotes/${quoteId}`);
+  async getQuote(quoteId: string): Promise<Quote> {
+    return this.requestWithRetry<Quote>(`/api/v1/quotes/${quoteId}`);
   }
 
   // ============ API KEYS ============
@@ -781,6 +845,24 @@ export class StablesApiClient {
   }
 
   // ============ WEBHOOKS ============
+
+  /**
+   * Check payout details against the per-currency rules without creating
+   * anything. Always answers 200 — the outcome is in the body — so an agent can
+   * discover what a corridor demands before spending a short-lived quote.
+   */
+  async validatePaymentMethod(
+    network: string,
+    destination: BankTransferDestination
+  ): Promise<ValidatePaymentMethodResponse> {
+    return this.requestWithRetry<ValidatePaymentMethodResponse>(
+      "/api/v1/payment-methods/validate",
+      {
+        method: "POST",
+        body: JSON.stringify({ network, destination }),
+      }
+    );
+  }
 
   async listWebhooks(): Promise<{ subscriptions: WebhookSubscription[] }> {
     return this.requestWithRetry<{ subscriptions: WebhookSubscription[] }>("/api/v1/webhooks");
