@@ -465,5 +465,82 @@ describe("StablesApiClient", () => {
       const quote = await client.getQuote("q_1");
       expect(quote.quote_id).toBe("q_1");
     });
+
+    it("reuses one idempotency key across retries", async () => {
+      // A fresh key per attempt would defeat the API's idempotency guard and
+      // could double-submit a payout. The key is built once at the call site and
+      // the same options object is reused, so this holds — pinned here because
+      // the guarantee is invisible from the code that depends on it.
+      fetchSpy.mockResolvedValueOnce(
+        new Response("boom", { status: 500, statusText: "Internal Server Error" })
+      );
+      fetchSpy.mockResolvedValueOnce(mockResponse({ id: "tr_1" }));
+
+      await client.createTransfer({
+        customer_id: "cus_1",
+        quote_id: "q_1",
+        destination: {
+          type: "bank",
+          account_holder_name: "Jane Doe",
+          bank_name: "Chase",
+          bank_country: "US",
+          currency: "USD",
+        },
+      });
+
+      expect(fetchSpy.mock.calls.length).toBeGreaterThan(1);
+      const keyOf = (i: number) =>
+        ((fetchSpy.mock.calls[i][1] as RequestInit).headers as Record<string, string>)[
+          "idempotency-key"
+        ];
+      expect(keyOf(0)).toBeDefined();
+      expect(keyOf(1)).toBe(keyOf(0));
+    });
+
+    it("createVirtualAccount sends workflow_type and no deposit_handling_mode", async () => {
+      fetchSpy.mockResolvedValueOnce(mockResponse({ id: "va_1" }));
+      await client.createVirtualAccount("cus_1", {
+        source: { currency: "AUD" },
+        workflow_type: "fiat_to_crypto",
+        destination: { currency: "usdt", payment_rail: "polygon", address: "0xabc" },
+      });
+      const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+      expect(body.workflow_type).toBe("fiat_to_crypto");
+      expect(body.destination.currency).toBe("usdt");
+      // Not part of the create schema — it was accepted and ignored.
+      expect(body.deposit_handling_mode).toBeUndefined();
+    });
+
+    it("simulate deposit and destination update hit the right paths", async () => {
+      fetchSpy.mockResolvedValueOnce(mockResponse({ ok: true }));
+      await client.simulateVirtualAccountDeposit("cus_1", "va_1", { amount: "100" });
+      expect(fetchSpy.mock.calls[0][0]).toContain(
+        "/api/v1/customers/cus_1/virtual-accounts/va_1/sandbox/simulate-deposit"
+      );
+
+      fetchSpy.mockResolvedValueOnce(mockResponse({ id: "va_1" }));
+      await client.updateVirtualAccountDestination("cus_1", "va_1", {
+        currency: "usdt",
+        payment_rail: "polygon",
+        address: "0xdef",
+      });
+      expect(fetchSpy.mock.calls[1][0]).toContain(
+        "/api/v1/customers/cus_1/virtual-accounts/va_1/destination"
+      );
+      expect((fetchSpy.mock.calls[1][1] as RequestInit).method).toBe("PUT");
+    });
+
+    it("reads RFIs and webhook deliveries", async () => {
+      fetchSpy.mockResolvedValueOnce(mockResponse({ rfis: [{ rfi_id: "r_1" }] }));
+      const { rfis } = await client.listCustomerRfis("cus_1");
+      expect(fetchSpy.mock.calls[0][0]).toContain("/api/v1/customers/cus_1/rfis");
+      expect(rfis[0].rfi_id).toBe("r_1");
+
+      fetchSpy.mockResolvedValueOnce(mockResponse({ deliveries: [] }));
+      await client.listWebhookDeliveries({ pageSize: 5, status: "FAILED" });
+      const url = fetchSpy.mock.calls[1][0] as string;
+      expect(url).toContain("/api/v1/webhooks/deliveries");
+      expect(url).toContain("status=FAILED");
+    });
   });
 });

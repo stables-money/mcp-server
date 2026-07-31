@@ -11,19 +11,17 @@ export function registerVirtualAccountTools(server: McpServer, client: StablesAp
   // Create Virtual Account
   server.tool(
     "create_virtual_account",
-    "Create a virtual bank account for a customer to receive fiat deposits. Deposits can automatically convert to crypto and payout to a wallet.",
+    "Create a payment route (virtual bank account) so a customer can receive fiat deposits that convert to a stablecoin and pay out to a wallet. " +
+      "The payout destination is mandatory: the API refuses a fiat-to-crypto route without one. " +
+      "Deposit handling is set server-side and defaults to auto_payout — change it afterwards with update_virtual_account.",
     {
-      customerId: z.string().describe("The customer ID to create the virtual account for"),
+      customerId: z.string().describe("The customer ID to create the payment route for"),
       sourceCurrency: z
         .string()
-        .describe("Currency for the virtual account (e.g., 'USD', 'EUR', 'GBP')"),
-      depositHandlingMode: z
-        .enum(["auto_payout", "hold", "manual"])
-        .optional()
-        .describe(
-          "How to handle deposits: 'auto_payout' converts and sends to wallet, 'hold' keeps as fiat, 'manual' requires approval"
-        ),
-      destinationAddress: z.string().optional().describe("Crypto wallet address for payouts"),
+        .describe("Fiat currency the route collects in (e.g. 'AUD', 'USD', 'EUR')"),
+      destinationAddress: z
+        .string()
+        .describe("Wallet address deposits are paid out to. Validated against the chosen network"),
       destinationPaymentRail: z
         .enum([
           "arbitrum",
@@ -37,53 +35,38 @@ export function registerVirtualAccountTools(server: McpServer, client: StablesAp
           "stellar",
           "tron",
         ])
-        .optional()
-        .describe("Blockchain network for the destination wallet"),
+        .describe("Blockchain network the payout address belongs to"),
       destinationCurrency: z
         .enum(["usdc", "usdt", "dai", "pyusd", "eurc"])
+        .default("usdt")
+        .describe("Stablecoin to receive"),
+      developerFeePercent: z
+        .string()
         .optional()
-        .describe("Stablecoin to receive (default: usdc)"),
+        .describe("Your fee on each deposit, as a numeric string (e.g. '0.5')"),
     },
     async ({
       customerId,
       sourceCurrency,
-      depositHandlingMode,
       destinationAddress,
       destinationPaymentRail,
       destinationCurrency,
+      developerFeePercent,
     }) => {
       try {
-        const request: {
-          source: { currency: string };
-          deposit_handling_mode?: "auto_payout" | "hold" | "manual";
-          destination?: {
-            currency: "usdc" | "usdt" | "dai" | "pyusd" | "eurc";
-            payment_rail:
-              | "arbitrum"
-              | "avalanche_c_chain"
-              | "base"
-              | "celo"
-              | "ethereum"
-              | "optimism"
-              | "polygon"
-              | "solana"
-              | "stellar"
-              | "tron";
-            address: string;
-          };
-        } = {
+        // deposit_handling_mode is deliberately absent: it is not part of the
+        // create schema and was silently ignored here. The server sets it, and
+        // update_virtual_account changes it.
+        const request = {
           source: { currency: sourceCurrency },
-          deposit_handling_mode: depositHandlingMode,
-        };
-
-        // Add destination if all required fields provided
-        if (destinationAddress && destinationPaymentRail) {
-          request.destination = {
-            currency: destinationCurrency || "usdc",
+          workflow_type: "fiat_to_crypto" as const,
+          destination: {
+            currency: destinationCurrency,
             payment_rail: destinationPaymentRail,
             address: destinationAddress,
-          };
-        }
+          },
+          ...(developerFeePercent && { developer_fee_percent: developerFeePercent }),
+        };
 
         const account = await client.createVirtualAccount(customerId, request);
 
@@ -256,23 +239,8 @@ Status: ${account.status}`,
       customerId: z.string().describe("The customer ID"),
       virtualAccountId: z.string().describe("The virtual account ID"),
       limit: z.number().optional().describe("Maximum number of events to return (default: 10)"),
-      eventType: z
-        .enum([
-          "funds_scheduled",
-          "funds_received",
-          "payment_submitted",
-          "payment_processed",
-          "in_review",
-          "refund",
-          "microdeposit",
-          "account_update",
-          "deactivation",
-          "activation",
-        ])
-        .optional()
-        .describe("Filter by event type"),
     },
-    async ({ customerId, virtualAccountId, limit, eventType: _eventType }) => {
+    async ({ customerId, virtualAccountId, limit }) => {
       try {
         const response = await client.getVirtualAccountHistory(customerId, virtualAccountId, {
           limit,
@@ -289,9 +257,23 @@ Status: ${account.status}`,
           };
         }
 
+        // Each row is a deposit and the payout it triggered. The old rendering
+        // read type/amount/currency, none of which exist on these records, so
+        // every line printed "undefined: undefined undefined".
         const eventList = response.data
           .map((e) => {
-            return `- ${e.created_at}: ${e.type} - ${e.amount} ${e.currency}${e.deposit_id ? ` (Deposit: ${e.deposit_id})` : ""}`;
+            const when = e.deposited_at ?? e.created_at ?? "-";
+            const deposit = `${e.deposit_amount ?? "-"} ${e.deposit_currency ?? ""}`.trim();
+            const payout =
+              e.payout_status || e.payout_amount
+                ? ` → payout ${e.payout_status ?? "?"}${
+                    e.payout_amount
+                      ? ` ${e.payout_amount} ${e.payout_currency ?? ""}`.trimEnd()
+                      : ""
+                  }`
+                : "";
+            const sender = e.sender_name ? ` from ${e.sender_name}` : "";
+            return `- ${when}: deposit ${deposit}${sender}${payout}`;
           })
           .join("\n");
 
@@ -299,7 +281,7 @@ Status: ${account.status}`,
           content: [
             {
               type: "text",
-              text: `Virtual Account History (${response.count} events):
+              text: `Payment Route Activity (${response.data.length} record${response.data.length === 1 ? "" : "s"}${response.has_more ? ", more available" : ""}):
 
 ${eventList}`,
             },
@@ -311,6 +293,74 @@ ${eventList}`,
             {
               type: "text",
               text: `Failed to get virtual account history: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Update the payout destination
+  server.tool(
+    "update_route_destination",
+    "Change the payout wallet on an existing payment route. Deposits after this point are paid out to the new address; use it when a customer rotates wallets rather than creating a second route.",
+    {
+      customerId: z.string().describe("The customer ID"),
+      virtualAccountId: z.string().describe("The payment route (virtual account) ID"),
+      destinationAddress: z.string().describe("New payout wallet address"),
+      destinationPaymentRail: z
+        .enum([
+          "arbitrum",
+          "avalanche_c_chain",
+          "base",
+          "celo",
+          "ethereum",
+          "optimism",
+          "polygon",
+          "solana",
+          "stellar",
+          "tron",
+        ])
+        .describe("Blockchain network the new address belongs to"),
+      destinationCurrency: z
+        .enum(["usdc", "usdt", "dai", "pyusd", "eurc"])
+        .default("usdt")
+        .describe("Stablecoin to receive"),
+    },
+    async ({
+      customerId,
+      virtualAccountId,
+      destinationAddress,
+      destinationPaymentRail,
+      destinationCurrency,
+    }) => {
+      try {
+        const account = await client.updateVirtualAccountDestination(customerId, virtualAccountId, {
+          currency: destinationCurrency,
+          payment_rail: destinationPaymentRail,
+          address: destinationAddress,
+        });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Payout destination updated for route ${account.id}.
+
+New destination: ${account.destination?.address ?? destinationAddress}
+Network: ${account.destination?.payment_rail ?? destinationPaymentRail}
+Currency: ${account.destination?.currency ?? destinationCurrency}
+
+Future deposits pay out to this address.`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Failed to update the payout destination: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
           isError: true,

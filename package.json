@@ -1,6 +1,6 @@
 {
   "name": "stables-mcp-server",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "MCP server for Stables fiat-to-crypto API - enables AI agents to manage customers, quotes, and transfers",
   "type": "module",
   "main": "build/index.js",
@@ -24,7 +24,8 @@
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write 'src/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts'",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "check:spec": "node scripts/check-spec-drift.mjs"
   },
   "keywords": [
     "mcp",
