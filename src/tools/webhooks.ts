@@ -7,37 +7,47 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { StablesApiClient } from "../lib/stables-client.js";
 
+/**
+ * The tenant-facing subset the API accepts. Declared as an enum rather than
+ * free strings so a wrong value is caught before the request instead of coming
+ * back as a 400 the model has to guess its way out of.
+ */
+const WEBHOOK_EVENT_TYPES = [
+  "customer.created",
+  "customer.updated",
+  "kyc_link.updated.status_transitioned",
+  "transfer.created",
+  "transfer.updated.status_transitioned",
+  "quote.created",
+  "quote.updated.status_transitioned",
+  "virtual_account.created",
+  "virtual_account.activity.created",
+  "virtual_account.activity.updated.status_transitioned",
+  "travel_rule.wallet_verification_required",
+  "rfi.created",
+  "rfi.updated",
+  "rfi.resolved",
+  "all",
+] as const;
+
 export function registerWebhookTools(server: McpServer, client: StablesApiClient) {
   // Create Webhook
   server.tool(
     "create_webhook",
     `Subscribe to Stables events via webhook. You'll receive POST requests to your URL when events occur.
 
-Available event types:
-- WEBHOOK_EVENT_TYPE_CUSTOMER_CREATED
-- WEBHOOK_EVENT_TYPE_CUSTOMER_UPDATED
-- WEBHOOK_EVENT_TYPE_KYC_STATUS_CHANGED
-- WEBHOOK_EVENT_TYPE_PAYMENT_CREATED
-- WEBHOOK_EVENT_TYPE_PAYMENT_STATUS_CHANGED
-- WEBHOOK_EVENT_TYPE_QUOTE_CREATED
-- WEBHOOK_EVENT_TYPE_QUOTE_EXPIRED
-- WEBHOOK_EVENT_TYPE_VA_DEPOSIT_RECEIVED
-- WEBHOOK_EVENT_TYPE_VA_PAYOUT_COMPLETED
-- WEBHOOK_EVENT_TYPE_VA_PAYOUT_FAILED
-- WEBHOOK_EVENT_TYPE_MONOOVA_NPP_RECEIVE_PAYMENT
-- WEBHOOK_EVENT_TYPE_MONOOVA_INBOUND_DIRECT_CREDIT
-- WEBHOOK_EVENT_TYPE_ALL
+Event types are dotted and lowercase. Use 'all' to receive everything.
 
 Security: Set a secret to enable HMAC-SHA256 signature verification via X-Webhook-Signature header.`,
     {
       name: z
         .string()
-        .describe("A descriptive name for this webhook (e.g., 'Payment Status Notifications')"),
+        .describe("A descriptive name for this webhook (e.g., 'Transfer status notifications')"),
       url: z.string().url().describe("The HTTPS URL to receive webhook POST requests"),
       eventTypes: z
-        .array(z.string())
+        .array(z.enum(WEBHOOK_EVENT_TYPES))
         .describe(
-          "List of event types to subscribe to (e.g., ['WEBHOOK_EVENT_TYPE_PAYMENT_STATUS_CHANGED'])"
+          "Event types to subscribe to (e.g. ['transfer.updated.status_transitioned']), or ['all']"
         ),
       secret: z
         .string()

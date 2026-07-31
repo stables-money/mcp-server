@@ -353,15 +353,19 @@ describe("StablesApiClient", () => {
       expect(fetchSpy.mock.calls[0][0]).toBe("https://api.test.stables.money/api/v1/quotes");
     });
 
-    it("listTransfers builds query params correctly", async () => {
+    it("listTransfers builds snake_case query params", async () => {
       fetchSpy.mockResolvedValueOnce(
-        mockResponse({ transfers: [], page: { nextPageToken: "", total: 0 } })
+        mockResponse({ transfers: [], page: { next_page_token: "", total: 0 } })
       );
-      await client.listTransfers({ status: "COMPLETED", customerId: "c1", pageSize: 10 });
+      await client.listTransfers({ status: "completed", customerId: "c1", pageSize: 10 });
       const url = fetchSpy.mock.calls[0][0] as string;
-      expect(url).toContain("status=COMPLETED");
-      expect(url).toContain("customerId=c1");
-      expect(url).toContain("pageSize=10");
+      expect(url).toContain("status=completed");
+      // camelCase keys were accepted and ignored, so the customer filter and
+      // paging silently did nothing and every call returned page one.
+      expect(url).toContain("customer_id=c1");
+      expect(url).toContain("page_size=10");
+      expect(url).not.toContain("customerId");
+      expect(url).not.toContain("pageSize");
     });
 
     it("getVirtualAccountHistory builds query params correctly", async () => {
@@ -393,6 +397,73 @@ describe("StablesApiClient", () => {
         "https://api.test.stables.money/api/v1/webhooks/wh_123"
       );
       expect((fetchSpy.mock.calls[0][1] as RequestInit).method).toBe("DELETE");
+    });
+  });
+
+  /**
+   * The wire format itself, asserted on the request body rather than on our own
+   * types. The suite used to mock fetch and check nothing about what was sent,
+   * so it stayed green through a whole snake_case migration.
+   */
+  describe("request bodies match the API contract", () => {
+    it("createTransfer sends snake_case with a discriminated destination", async () => {
+      fetchSpy.mockResolvedValueOnce(mockResponse({ id: "tr_1" }));
+      await client.createTransfer({
+        customer_id: "cus_1",
+        quote_id: "q_1",
+        destination: {
+          type: "bank",
+          account_holder_name: "Jane Doe",
+          bank_name: "Chase",
+          bank_country: "US",
+          currency: "USD",
+          recipient_type: "individual",
+          date_of_birth: "1990-01-15",
+          address: {
+            street: "123 Main St",
+            city: "San Francisco",
+            state: "CA",
+            postal_code: "94105",
+            country: "us",
+          },
+          aba_code: "021000021",
+        },
+      });
+      const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+      expect(body.customer_id).toBe("cus_1");
+      expect(body.quote_id).toBe("q_1");
+      expect(body.destination.type).toBe("bank");
+      // The enhanced-beneficiary fields required for AED/CAD/EUR/GBP/MXN/USD.
+      expect(body.destination.recipient_type).toBe("individual");
+      expect(body.destination.date_of_birth).toBe("1990-01-15");
+      expect(body.destination.address.postal_code).toBe("94105");
+      // Bank codes are flat now, not nested under bankCodes.
+      expect(body.destination.aba_code).toBe("021000021");
+      expect(body.destination.bankCodes).toBeUndefined();
+      // The old shape must be gone entirely.
+      expect(body.paymentMethod).toBeUndefined();
+      expect(body.customerId).toBeUndefined();
+    });
+
+    it("createQuote sends source/destination, not from/to", async () => {
+      fetchSpy.mockResolvedValueOnce(mockResponse({ quote_id: "q_1" }));
+      await client.createQuote({
+        source: { currency: "USDT", amount: "100", network: "polygon" },
+        destination: { currency: "EUR", country: "DE", network: "swift" },
+      });
+      const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+      expect(body.source.currency).toBe("USDT");
+      expect(body.destination.country).toBe("DE");
+      expect(body.from).toBeUndefined();
+      expect(body.to).toBeUndefined();
+      // Replaced by destination.network.
+      expect(body.paymentMethodType).toBeUndefined();
+    });
+
+    it("getQuote returns the quote directly, with no wrapper", async () => {
+      fetchSpy.mockResolvedValueOnce(mockResponse({ quote_id: "q_1", status: "active" }));
+      const quote = await client.getQuote("q_1");
+      expect(quote.quote_id).toBe("q_1");
     });
   });
 });
