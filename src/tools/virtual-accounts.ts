@@ -13,7 +13,7 @@ export function registerVirtualAccountTools(server: McpServer, client: StablesAp
     "create_virtual_account",
     "Create a payment route (virtual bank account) so a customer can receive fiat deposits that convert to a stablecoin and pay out to a wallet. " +
       "The payout destination is mandatory: the API refuses a fiat-to-crypto route without one. " +
-      "Deposit handling is set server-side and defaults to auto_payout — change it afterwards with update_virtual_account.",
+      "Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_virtual_account.",
     {
       customerId: z.string().describe("The customer ID to create the payment route for"),
       sourceCurrency: z

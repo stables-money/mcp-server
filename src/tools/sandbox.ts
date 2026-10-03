@@ -58,7 +58,7 @@ export function registerSandboxTools(server: McpServer, client: StablesApiClient
           content: [
             {
               type: "text" as const,
-              text: `Failed to simulate the deposit: ${error instanceof Error ? error.message : "Unknown error"}\n\nThis endpoint exists only in sandbox — on production it will not be found.`,
+              text: `Failed to simulate the deposit: ${error instanceof Error ? error.message : "Unknown error"}\n\nThis endpoint exists only in sandbox: on production it will not be found.`,
             },
           ],
           isError: true,
@@ -89,7 +89,7 @@ export function registerSandboxTools(server: McpServer, client: StablesApiClient
           content: [
             {
               type: "text" as const,
-              text: `Failed to simulate the transfer deposit: ${error instanceof Error ? error.message : "Unknown error"}\n\nThis endpoint exists only in sandbox — on production it will not be found.`,
+              text: `Failed to simulate the transfer deposit: ${error instanceof Error ? error.message : "Unknown error"}\n\nThis endpoint exists only in sandbox: on production it will not be found.`,
             },
           ],
           isError: true,

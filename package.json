@@ -29,7 +29,8 @@
     "format": "prettier --write 'src/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts'",
     "prepublishOnly": "npm run build",
-    "check:spec": "node scripts/check-spec-drift.mjs"
+    "check:spec": "node scripts/check-spec-drift.mjs",
+    "docs:reference": "node scripts/generate-tool-reference.mjs > docs/tool-reference.md"
   },
   "keywords": [
     "mcp",

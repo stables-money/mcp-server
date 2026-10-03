@@ -8,9 +8,16 @@
  *   PORT=3333 node build/serve.js
  */
 
+import { webcrypto } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import { handleRequest } from "./http/handler.js";
+
+// Node 18 has no global `crypto`; the MCP transport needs crypto.randomUUID().
+// Node 20+ and Workers already provide it.
+if (!globalThis.crypto) {
+  Object.defineProperty(globalThis, "crypto", { value: webcrypto, configurable: true });
+}
 
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";

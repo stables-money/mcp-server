@@ -81,7 +81,7 @@ export function registerQuoteTools(server: McpServer, client: StablesApiClient) 
       preview: z
         .boolean()
         .optional()
-        .describe("Price the quote without persisting it — use to show an estimate"),
+        .describe("Price the quote without persisting it, to show an estimate"),
       metadata: z.record(z.string()).optional().describe("Optional metadata"),
     },
     async (input) => {
