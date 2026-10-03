@@ -208,7 +208,7 @@ ${webhookList}`,
             content: [
               {
                 type: "text" as const,
-                text: "No webhook deliveries found. Attempts only exist where an active subscription matched an event — check 'list_webhooks' if you expected some.",
+                text: "No webhook deliveries found. Attempts only exist where an active subscription matched an event, check 'list_webhooks' if you expected some.",
               },
             ],
           };

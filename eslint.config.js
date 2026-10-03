@@ -16,6 +16,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ["build/**", "node_modules/**", "vitest.config.ts"],
+    ignores: ["build/**", "node_modules/**", "vitest.config.ts", "vitest.setup.ts"],
   }
 );

@@ -52,7 +52,54 @@ This MCP server provides 26 tools across 7 categories:
 - `delete_webhook` - Delete a webhook subscription
 - `list_webhook_deliveries` - Recent delivery attempts, status codes and retry state
 
-## Installation
+## Hosted server (recommended)
+
+The server runs as a hosted service, so there is nothing to install. Point your MCP client at:
+
+```
+https://mcp.stables.money/mcp
+```
+
+and send your Stables API key as a bearer token. The key you get during onboarding is all you need: a `sti_test_…` key reaches sandbox, a `sti_live_…` key reaches production and moves real money. The hosted server keeps no credentials of its own; every request carries yours.
+
+### Claude Code
+
+```bash
+claude mcp add --transport http stables https://mcp.stables.money/mcp --header "Authorization: Bearer ${STABLES_API_KEY}"
+```
+
+### Cursor, VS Code, Windsurf and other clients with a `url` field
+
+```json
+{
+  "mcpServers": {
+    "stables": {
+      "url": "https://mcp.stables.money/mcp",
+      "headers": {
+        "Authorization": "Bearer sti_test_..."
+      }
+    }
+  }
+}
+```
+
+### Codex
+
+```toml
+[mcp_servers.stables]
+url = "https://mcp.stables.money/mcp"
+bearer_token_env_var = "STABLES_API_KEY"
+```
+
+### Claude.ai and ChatGPT
+
+Claude.ai custom connectors and ChatGPT connectors sign in with OAuth rather than a fixed key. OAuth sign-in for the hosted server is in progress; until it ships, use one of the clients above, or run the server locally as described below.
+
+## Running locally
+
+The same server also runs as a local process over stdio, which is what `npx stables-mcp-server` does. Use this for a `sti_local_…` key against your own deployment, or when your client cannot reach the internet.
+
+### Installation
 
 ```bash
 # Install from npm
@@ -65,7 +112,7 @@ npm install
 npm run build
 ```
 
-## Configuration
+### Configuration
 
 The server requires the following environment variables:
 
@@ -93,9 +140,9 @@ local deployment.
 **Start with a sandbox key.** An agent holding a live key can move real money on
 your behalf; see [agent safety](https://docs.stables.money/get-started/getting-started/quickstart/building-with-ai/agent-safety).
 
-## Usage
+### Usage
 
-### With Claude Desktop
+#### With Claude Desktop
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -116,7 +163,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 Then restart Claude Desktop.
 
-### With Cursor, Codex, ChatGPT, or another MCP client
+#### With Cursor, Codex, ChatGPT, or another MCP client
 
 Use the same command and environment variables in any MCP-compatible client:
 

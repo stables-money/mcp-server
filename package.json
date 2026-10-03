@@ -1,11 +1,12 @@
 {
   "name": "stables-mcp-server",
-  "version": "2.1.0",
-  "description": "MCP server for Stables fiat-to-crypto API - enables AI agents to manage customers, quotes, and transfers",
+  "version": "2.2.0",
+  "description": "MCP server for the Stables fiat-to-crypto API, hosted at mcp.stables.money or run locally - enables AI agents to manage customers, quotes, transfers and payment routes",
   "type": "module",
   "main": "build/index.js",
   "bin": {
-    "stables-mcp-server": "build/index.js"
+    "stables-mcp-server": "build/index.js",
+    "stables-mcp-serve": "build/serve.js"
   },
   "files": [
     "build",
@@ -15,6 +16,9 @@
   "scripts": {
     "build": "tsc",
     "start": "node build/index.js",
+    "serve": "node build/serve.js",
+    "dev:worker": "wrangler dev",
+    "deploy:worker": "wrangler deploy",
     "dev": "tsc --watch",
     "inspect": "npx @modelcontextprotocol/inspector node build/index.js",
     "test": "vitest run",
@@ -25,7 +29,8 @@
     "format": "prettier --write 'src/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts'",
     "prepublishOnly": "npm run build",
-    "check:spec": "node scripts/check-spec-drift.mjs"
+    "check:spec": "node scripts/check-spec-drift.mjs",
+    "docs:reference": "node scripts/generate-tool-reference.mjs > docs/tool-reference.md"
   },
   "keywords": [
     "mcp",
@@ -72,7 +77,8 @@
     "prettier": "^3.8.1",
     "typescript": "^5.0.0",
     "typescript-eslint": "^8.56.1",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "wrangler": "^4.145.0"
   },
   "engines": {
     "node": ">=18.0.0"
