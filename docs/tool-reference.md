@@ -135,7 +135,7 @@ Get details about an existing quote including its current status
 
 #### create_transfer
 
-Execute a transfer using an active quote. The quote must not be expired. This initiates real money movement, so get explicit human approval first. For payouts in AED, CAD, EUR, GBP, MXN, USD you must also supply recipientType, the full beneficiary address, and dateOfBirth when the recipient is an individual. Use validate_payment_method first to check the details without spending the quote.
+Execute a transfer using an active quote. The quote must not be expired. This initiates real money movement, so get explicit human approval first. For payouts in AED, CAD, EUR, GBP, MXN, USD you must also supply recipientType, the full beneficiary address, and dateOfBirth when the recipient is an individual.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
