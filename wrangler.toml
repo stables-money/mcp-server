@@ -1,0 +1,20 @@
+# Cloudflare Worker for the hosted Stables MCP server.
+#
+#   npm run dev:worker      # local, http://localhost:8787/mcp
+#   npm run deploy:worker   # publishes the Worker
+#
+# The Worker stores no secrets: each request carries the caller's API key.
+name = "stables-mcp"
+main = "src/worker.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[observability]
+enabled = true
+
+# Production hostname. Cloudflare creates the DNS record and certificate for a
+# custom domain when the Worker is deployed with this block present.
+[[routes]]
+pattern = "mcp.stables.money"
+custom_domain = true

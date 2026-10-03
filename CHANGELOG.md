@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.2.0] - 2026-10-03
+
+The server is now hosted. Until this release the only way to use it was to run
+it on your own machine over stdio, which is not how MCP servers are consumed
+any more: clients expect a URL.
+
+### Added
+- **Hosted endpoint** at `https://mcp.stables.money/mcp` over Streamable HTTP.
+  Nothing to install; send your Stables API key as a bearer token and the key
+  decides the environment, exactly as `STABLES_API_KEY` does for the local
+  server. The service is stateless and holds no credentials of its own.
+- `src/http/handler.ts`: a web-standard `Request → Response` handler, with two
+  entry points that share it: a Cloudflare Worker (`src/worker.ts`,
+  `wrangler.toml`) and a Node process (`src/serve.ts`, `Dockerfile`).
+- `src/server.ts`: one factory builds the MCP server for every transport, so
+  the tool surface cannot differ between hosted and local.
+- Root and `/health` endpoints describing the server, and CORS for
+  browser-based clients.
+
+### Changed
+- `npx stables-mcp-server` still works and is unchanged, but the README now
+  leads with the hosted endpoint.
+
+### Not yet
+- OAuth sign-in, which Claude.ai custom connectors and ChatGPT connectors
+  require. The 401 already carries a bearer challenge; the authorization
+  server and discovery metadata come next.
+
 ## [2.1.0] - 2026-07-31
 
 Finishes the sync started in 2.0.0, and adds a check so the next drift is caught
