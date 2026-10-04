@@ -14,11 +14,11 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "npm run version:sync && tsc",
     "start": "node build/index.js",
     "serve": "node build/serve.js",
-    "dev:worker": "wrangler dev",
-    "deploy:worker": "wrangler deploy",
+    "dev:worker": "npm run version:sync && wrangler dev",
+    "deploy:worker": "npm run version:sync && wrangler deploy",
     "dev": "tsc --watch",
     "inspect": "npx @modelcontextprotocol/inspector node build/index.js",
     "test": "vitest run",
@@ -30,7 +30,9 @@
     "format:check": "prettier --check 'src/**/*.ts'",
     "prepublishOnly": "npm run build",
     "check:spec": "node scripts/check-spec-drift.mjs",
-    "docs:reference": "node scripts/generate-tool-reference.mjs > docs/tool-reference.md"
+    "docs:reference": "node scripts/generate-tool-reference.mjs > docs/tool-reference.md",
+    "version:sync": "node scripts/write-version.mjs",
+    "version": "npm run version:sync && git add src/version.ts"
   },
   "keywords": [
     "mcp",
