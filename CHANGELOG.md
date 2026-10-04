@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.1] - 2026-10-05
+
+Re-publish of 2.2.0. The 2.2.0 release ran its npm publish successfully on
+2026-10-03, but the version was removed from the registry minutes later and
+npm does not allow a removed version number to be reused, so `npm install
+stables-mcp-server` kept resolving to 2.1.0. No code changes.
+
 ## [2.2.0] - 2026-10-03
 
 The server is now hosted. Until this release the only way to use it was to run
