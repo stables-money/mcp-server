@@ -2,10 +2,10 @@
 
 ## [2.2.1] - 2026-10-05
 
-Re-publish of 2.2.0. The 2.2.0 release ran its npm publish successfully on
-2026-10-03, but the version was removed from the registry minutes later and
-npm does not allow a removed version number to be reused, so `npm install
-stables-mcp-server` kept resolving to 2.1.0. No code changes.
+Re-release of 2.2.0 with no code changes. It was cut because 2.2.0 appeared to
+be missing from npm; the cause turned out to be an endpoint-protection policy
+on the publisher's machine that hides packages younger than a minimum age, not
+the registry. Both versions are published and installable.
 
 ## [2.2.0] - 2026-10-03
 
