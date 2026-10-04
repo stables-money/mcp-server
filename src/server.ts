@@ -15,8 +15,10 @@ import { registerApiKeyTools } from "./tools/api-keys.js";
 import { registerWebhookTools } from "./tools/webhooks.js";
 import { registerSandboxTools } from "./tools/sandbox.js";
 
+import { SERVER_VERSION } from "./version.js";
+
 export const SERVER_NAME = "stables-mcp-server";
-export const SERVER_VERSION = "2.2.0";
+export { SERVER_VERSION };
 
 export function createStablesMcpServer(client: StablesApiClient): McpServer {
   const server = new McpServer({
