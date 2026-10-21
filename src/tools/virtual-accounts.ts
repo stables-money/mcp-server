@@ -40,10 +40,6 @@ export function registerVirtualAccountTools(server: McpServer, client: StablesAp
         .enum(["usdc", "usdt", "dai", "pyusd", "eurc"])
         .default("usdt")
         .describe("Stablecoin to receive"),
-      developerFeePercent: z
-        .string()
-        .optional()
-        .describe("Your fee on each deposit, as a numeric string (e.g. '0.5')"),
     },
     async ({
       customerId,
@@ -51,7 +47,6 @@ export function registerVirtualAccountTools(server: McpServer, client: StablesAp
       destinationAddress,
       destinationPaymentRail,
       destinationCurrency,
-      developerFeePercent,
     }) => {
       try {
         // deposit_handling_mode is deliberately absent: it is not part of the
@@ -65,7 +60,6 @@ export function registerVirtualAccountTools(server: McpServer, client: StablesAp
             payment_rail: destinationPaymentRail,
             address: destinationAddress,
           },
-          ...(developerFeePercent && { developer_fee_percent: developerFeePercent }),
         };
 
         const account = await client.createVirtualAccount(customerId, request);
@@ -130,25 +124,35 @@ Share the deposit instructions with the customer to receive funds.`,
   // List Virtual Accounts (by customer)
   server.tool(
     "list_virtual_accounts",
-    "List all virtual accounts for a customer",
+    "List payment routes (virtual accounts) for one customer, or across every customer when customerId is omitted",
     {
-      customerId: z.string().describe("The customer ID to list virtual accounts for"),
+      customerId: z
+        .string()
+        .optional()
+        .describe("Only this customer's routes; omit to list routes across all customers"),
       status: z
         .enum(["activated", "deactivated", "pending", "closed"])
         .optional()
         .describe("Filter by account status"),
       limit: z.number().optional().describe("Maximum number of accounts to return"),
+      startingAfter: z
+        .string()
+        .optional()
+        .describe("Return routes after this route ID (the last ID of the previous page)"),
     },
-    async ({ customerId, status, limit }) => {
+    async ({ customerId, status, limit, startingAfter }) => {
       try {
-        const response = await client.listVirtualAccounts(customerId, { status, limit });
+        const response = customerId
+          ? await client.listVirtualAccounts(customerId, { status, limit, startingAfter })
+          : await client.listAllVirtualAccounts({ status, limit, startingAfter });
+        const scope = customerId ? `customer ${customerId}` : "any customer";
 
         if (response.data.length === 0) {
           return {
             content: [
               {
                 type: "text",
-                text: `No virtual accounts found for customer ${customerId}. Use 'create_virtual_account' to create one.`,
+                text: `No virtual accounts found for ${scope}. Use 'create_virtual_account' to create one.`,
               },
             ],
           };
@@ -170,7 +174,7 @@ Share the deposit instructions with the customer to receive funds.`,
           content: [
             {
               type: "text",
-              text: `Virtual Accounts for Customer ${customerId} (${response.count} total):
+              text: `Virtual Accounts for ${scope} (${response.count} total):
 
 ${accountList}`,
             },
@@ -182,6 +186,142 @@ ${accountList}`,
             {
               type: "text",
               text: `Failed to list virtual accounts: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // AUD payment route whitelisting
+  const whitelistIds = {
+    customerId: z.string().describe("The customer ID"),
+    virtualAccountId: z.string().describe("The AUD payment route (virtual account) ID"),
+  };
+
+  server.tool(
+    "list_route_whitelist",
+    "List the bank accounts whitelisted to pay into an AUD payment route. Some Australian routes only accept deposits from whitelisted source accounts.",
+    whitelistIds,
+    async ({ customerId, virtualAccountId }) => {
+      try {
+        const result = await client.listRouteWhitelist(customerId, virtualAccountId);
+        if (result.data.length === 0) {
+          return {
+            content: [{ type: "text", text: "No whitelisted source accounts on this route." }],
+          };
+        }
+        const lines = result.data
+          .map(
+            (a) =>
+              `- #${a.id}: BSB ${a.bsb_number} account ${a.account_number}${a.account_name ? ` (${a.account_name})` : ""} - ${a.account_status}`
+          )
+          .join("\n");
+        return {
+          content: [
+            { type: "text", text: `Whitelisted source accounts (${result.count}):\n${lines}` },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to list whitelist: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "add_route_whitelist_account",
+    "Whitelist an Australian bank account (BSB and account number) to pay into an AUD payment route.",
+    {
+      ...whitelistIds,
+      bsbNumber: z.string().describe("Source account BSB"),
+      accountNumber: z.string().describe("Source account number"),
+      enabled: z.boolean().default(true).describe("Whether deposits from it are accepted now"),
+    },
+    async ({ customerId, virtualAccountId, bsbNumber, accountNumber, enabled }) => {
+      try {
+        const account = await client.addRouteWhitelistAccount(customerId, virtualAccountId, {
+          bsb_number: bsbNumber,
+          account_number: accountNumber,
+          account_status: enabled ? "enabled" : "disabled",
+        });
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Whitelisted #${account.id}: BSB ${account.bsb_number} account ${account.account_number} (${account.account_status})`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to whitelist account: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "update_route_whitelist_account",
+    "Change or disable a whitelisted source account on an AUD payment route. Send the full record: BSB, account number and status.",
+    {
+      ...whitelistIds,
+      sourceAccountId: z
+        .number()
+        .int()
+        .positive()
+        .describe("The whitelist entry ID (from list_route_whitelist)"),
+      bsbNumber: z.string().describe("Source account BSB"),
+      accountNumber: z.string().describe("Source account number"),
+      enabled: z.boolean().describe("false to stop accepting deposits from it"),
+    },
+    async ({
+      customerId,
+      virtualAccountId,
+      sourceAccountId,
+      bsbNumber,
+      accountNumber,
+      enabled,
+    }) => {
+      try {
+        const account = await client.updateRouteWhitelistAccount(
+          customerId,
+          virtualAccountId,
+          sourceAccountId,
+          {
+            bsb_number: bsbNumber,
+            account_number: accountNumber,
+            account_status: enabled ? "enabled" : "disabled",
+          }
+        );
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Updated #${account.id}: BSB ${account.bsb_number} account ${account.account_number} (${account.account_status})`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to update whitelist entry: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
           isError: true,

@@ -13,10 +13,12 @@
 import { handleRequest } from "../build/http/handler.js";
 
 const CATEGORIES = [
-  ["Customers", ["create_customer", "get_customer", "list_customers", "get_verification_link", "update_customer", "update_customer_metadata"]],
+  ["Customers", ["create_customer", "create_customer_onboarding_link", "get_customer", "list_customers", "get_verification_link", "update_customer", "update_customer_metadata"]],
+  ["Entitlements", ["list_available_entitlements", "request_entitlements", "submit_entitlement_requirements"]],
   ["Quotes", ["create_quote", "get_quote"]],
-  ["Transfers", ["create_transfer", "get_transfer", "list_transfers"]],
-  ["Payment routes", ["create_virtual_account", "list_virtual_accounts", "update_virtual_account", "get_virtual_account_history", "update_route_destination"]],
+  ["Transfers", ["validate_payment_method", "create_transfer", "get_transfer", "list_transfers"]],
+  ["Payment routes", ["create_virtual_account", "list_virtual_accounts", "update_virtual_account", "get_virtual_account_history", "update_route_destination", "list_route_whitelist", "add_route_whitelist_account", "update_route_whitelist_account"]],
+  ["Balances", ["get_balance", "get_balance_wallet", "create_balance_wallet", "list_balance_activity", "list_pending_balance_deposits", "list_whitelisted_wallets"]],
   ["Sandbox", ["simulate_route_deposit", "simulate_transfer_deposit"]],
   ["API keys", ["create_api_key", "list_api_keys", "get_api_key", "revoke_api_key"]],
   ["Webhooks", ["create_webhook", "list_webhooks", "delete_webhook", "list_webhook_deliveries"]],
