@@ -173,7 +173,11 @@ Deposits from a wallet that is not whitelisted are held for review (see list_pen
       try {
         const result = await client.listWhitelistedWallets(params);
         if (result.data.length === 0) {
-          return text("No whitelisted wallets. Whitelist one in the Stables dashboard.");
+          return text(
+            params.status || params.network
+              ? "No whitelisted wallets match that filter."
+              : "No whitelisted wallets. Whitelist one in the Stables dashboard."
+          );
         }
         const lines = result.data.map(
           (w) =>
