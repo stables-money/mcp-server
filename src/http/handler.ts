@@ -107,6 +107,21 @@ export async function handleRequest(request: Request): Promise<Response> {
     return withCors(json({ status: "ok", version: SERVER_VERSION }));
   }
   if (url.pathname === MCP_PATH || url.pathname === `${MCP_PATH}/`) {
+    // Stateless means no server-initiated SSE stream. Answering GET with 405
+    // is how the spec says to decline it; letting the transport open a stream
+    // that closes at once makes clients reconnect in a tight loop.
+    if (request.method === "GET") {
+      return withCors(
+        json(
+          {
+            error: "method_not_allowed",
+            message: "This server has no SSE stream. Send JSON-RPC with POST.",
+          },
+          405,
+          { allow: "POST, OPTIONS" }
+        )
+      );
+    }
     return withCors(await handleMcp(request));
   }
   return withCors(
