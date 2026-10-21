@@ -10,31 +10,46 @@ MCP (Model Context Protocol) is an open standard that provides a standardized wa
 
 ## Features
 
-This MCP server provides 26 tools across 7 categories:
+This MCP server provides 40 tools across 9 categories, one for every operation documented on [docs.stables.money](https://docs.stables.money) (a contract test checks this, see below):
 
 ### Customer Management
 - `create_customer` - Create individual or business customers
+- `create_customer_onboarding_link` - Create a customer and a hosted verification link in one call
 - `get_customer` - Get customer details and verification status
 - `list_customers` - List all customers
 - `get_verification_link` - Generate KYC verification links
 - `update_customer` - Update customer details and entitlements
 - `update_customer_metadata` - Update customer metadata key-value pairs
 
+### Entitlements
+- `list_available_entitlements` - Products and rails a customer can still apply for
+- `request_entitlements` - Apply for entitlements (e.g. `aed_local`) for an existing customer
+- `submit_entitlement_requirements` - Send the extra verification Stables asks for
+
 ### Quotes
 - `create_quote` - Get exchange rate quotes (USDC/USDT to fiat)
 - `get_quote` - Check quote status and details
 
 ### Transfers
-- `create_transfer` - Execute a transfer using an active quote
+- `validate_payment_method` - Check payout details against a corridor's rules before transferring
+- `create_transfer` - Execute a transfer using an active quote, paid by deposit or from your balance
 - `get_transfer` - Check transfer status
 - `list_transfers` - List transfers with filters
 
 ### Virtual Accounts
 - `create_virtual_account` - Create virtual bank accounts for fiat deposits
-- `list_virtual_accounts` - List virtual accounts for a customer
+- `list_virtual_accounts` - List virtual accounts for a customer, or across all customers
 - `update_virtual_account` - Update virtual account settings
 - `get_virtual_account_history` - Get deposits and their payouts for a payment route
 - `update_route_destination` - Change the payout wallet on an existing route
+- `list_route_whitelist` / `add_route_whitelist_account` / `update_route_whitelist_account` - Source-account whitelisting for AUD routes
+
+### Balances
+- `get_balance` - Your organisation's balance per asset and network
+- `get_balance_wallet` / `create_balance_wallet` - The deposit wallet that tops up the balance
+- `list_balance_activity` - Deposits credited to the balance
+- `list_pending_balance_deposits` - Deposits held before crediting, and why
+- `list_whitelisted_wallets` - Wallets allowed to fund the balance
 
 ### Sandbox
 - `simulate_route_deposit` - Simulate a fiat deposit into a payment route (sandbox only)
@@ -270,10 +285,12 @@ stables-mcp-server/
 │   │   ├── stables-client.ts # Stables API client (with retries, timeouts)
 │   │   └── stables-client.test.ts
 │   └── tools/
-│       ├── customers.ts      # Customer management tools (6)
+│       ├── customers.ts      # Customer management tools (7)
+│       ├── entitlements.ts   # Entitlement tools (3)
 │       ├── quotes.ts         # Quote tools (2)
-│       ├── transfers.ts      # Transfer tools (3)
-│       ├── virtual-accounts.ts # Virtual account tools (6)
+│       ├── transfers.ts      # Transfer tools (4)
+│       ├── virtual-accounts.ts # Payment route tools (8)
+│       ├── balances.ts       # Balance tools (6)
 │       ├── api-keys.ts       # API key tools (4)
 │       ├── webhooks.ts       # Webhook tools (3)
 │       └── sandbox.ts        # Sandbox deposit simulation (2)

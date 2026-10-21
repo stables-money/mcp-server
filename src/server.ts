@@ -14,6 +14,8 @@ import { registerVirtualAccountTools } from "./tools/virtual-accounts.js";
 import { registerApiKeyTools } from "./tools/api-keys.js";
 import { registerWebhookTools } from "./tools/webhooks.js";
 import { registerSandboxTools } from "./tools/sandbox.js";
+import { registerBalanceTools } from "./tools/balances.js";
+import { registerEntitlementTools } from "./tools/entitlements.js";
 
 import { SERVER_VERSION } from "./version.js";
 
@@ -34,6 +36,8 @@ export function createStablesMcpServer(client: StablesApiClient): McpServer {
   registerVirtualAccountTools(server, client);
   registerApiKeyTools(server, client);
   registerWebhookTools(server, client);
+  registerBalanceTools(server, client);
+  registerEntitlementTools(server, client);
   registerSandboxTools(server, client);
 
   return server;

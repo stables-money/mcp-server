@@ -101,7 +101,7 @@ Source and issues: [github.com/stables-money/mcp-server](https://github.com/stab
 
 ## Tools
 
-The server exposes 26 tools. Each one mirrors a documented Stables API endpoint and nothing else; the reference below is generated from the server's own tool schemas, so it matches what your client sees.
+The server exposes 40 tools. Each one mirrors a documented Stables API endpoint and nothing else; the reference below is generated from the server's own tool schemas, so it matches what your client sees.
 
 ### Customers
 

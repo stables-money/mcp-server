@@ -1,5 +1,46 @@
 # Changelog
 
+## [2.3.0] - 2026-10-21
+
+The server now mirrors docs.stables.money, and a contract test keeps it that
+way.
+
+### Added
+- **Balances:** `get_balance`, `get_balance_wallet`, `create_balance_wallet`,
+  `list_balance_activity`, `list_pending_balance_deposits`,
+  `list_whitelisted_wallets`, and `fundingSource: "prefund_balance"` on
+  `create_transfer` to pay from the balance.
+- **Entitlements:** `list_available_entitlements`, `request_entitlements`,
+  `submit_entitlement_requirements`.
+- `validate_payment_method`: check payout details against a corridor before
+  spending a quote.
+- `create_customer_onboarding_link`: create a customer and a hosted
+  verification link in one call.
+- AUD route whitelisting: `list_route_whitelist`, `add_route_whitelist_account`,
+  `update_route_whitelist_account`.
+- `list_virtual_accounts` lists across every customer when `customerId` is
+  omitted, and pages with `startingAfter`. `list_customers` pages with
+  `pageSize`/`pageToken`. `get_customer` takes `include`.
+- **Contract test** (`src/contract.test.ts`, `npm run check:spec`): calls every
+  tool and validates each request against the live OpenAPI spec (unknown
+  fields, missing required fields, enums), renders a spec-shaped response
+  through each tool, and fails when an operation documented on
+  docs.stables.money has no tool. Replaces the hand-kept endpoint list.
+
+### Fixed
+- `get_verification_link` sent `ttlInSecs`/`successUrl`/`rejectUrl` in
+  camelCase, so the API dropped them: links always had the default TTL and no
+  redirect. Also takes `verificationType` now.
+- `create_transfer` offered PayID types `phone` and `org_id`, which the API
+  rejects; they are `phone_number` and `organisation_id`, and `acn` is added.
+  `purposeCode` is now the API's list of codes rather than free text.
+- `create_customer` (business) sent four fields the API no longer accepts
+  (`main_source_of_funds`, `is_your_business_a_dao`, `industry_selection`,
+  `how_did_you_come_across_stables`); removed.
+- `create_virtual_account` sent `developer_fee_percent`, which the API ignores
+  (the developer fee is set per organisation now); removed.
+- Entitlement inputs accept `gbp_virtual_account` and the full list.
+
 ## [2.2.1] - 2026-10-05
 
 Re-release of 2.2.0 with no code changes. It was cut because 2.2.0 appeared to
