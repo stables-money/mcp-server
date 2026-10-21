@@ -16,6 +16,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 2.2.2 was released without bumping package.json, so npm refused to
+      # publish over 2.2.1 and the release shipped nothing. Fail first, and say why.
+      - name: Check the release tag matches package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p 'require("./package.json").version')"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Release $GITHUB_REF_NAME does not match package.json ($version). Bump with 'npm version' on main before releasing."
+            exit 1
+          fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
