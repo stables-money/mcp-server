@@ -45,9 +45,11 @@ jobs:
         if: matrix.node-version == 22
         run: npx wrangler deploy --dry-run --outdir /tmp/worker-dry-run
 
-      # The tests mock fetch, so they prove what we send and nothing about what
-      # the API still accepts — which is how four months of drift went unnoticed.
-      # This checks our endpoints against the live spec, and skips itself if the
-      # spec is unreachable so an unrelated outage cannot fail a build.
-      - name: Check for API spec drift
+      # The unit tests mock fetch, so they prove what we send and nothing about
+      # what the API still accepts, which is how four months of drift went
+      # unnoticed. The contract test calls every tool and checks each request
+      # against the live spec, and checks that every operation documented on
+      # docs.stables.money has a tool. It skips itself if either is unreachable,
+      # so an unrelated outage cannot fail a build.
+      - name: Contract test against the docs and the live API
         run: npm run check:spec

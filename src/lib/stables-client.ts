@@ -39,12 +39,16 @@ export interface VerificationLevelResponse {
 }
 
 /** The five feature entitlements the API accepts. */
-export type EntitlementId =
-  | "base_payout"
-  | "virtual_account"
-  | "eur_virtual_account"
-  | "usd_virtual_account"
-  | "aed_local";
+export const ENTITLEMENT_IDS = [
+  "base_payout",
+  "virtual_account",
+  "eur_virtual_account",
+  "gbp_virtual_account",
+  "usd_virtual_account",
+  "aed_local",
+] as const;
+
+export type EntitlementId = (typeof ENTITLEMENT_IDS)[number];
 
 export interface Entitlement {
   name: string;
@@ -117,9 +121,6 @@ export interface CreateBusinessCustomerRequest {
   describe_compliance_controls?: string;
   account_purpose?: string;
   account_purpose_other?: string;
-  is_your_business_a_dao?: boolean;
-  industry_selection?: string;
-  main_source_of_funds?: string;
   source_of_funds?: string;
   source_of_funds_description?: string;
   expected_annual_revenue?: string;
@@ -128,7 +129,6 @@ export interface CreateBusinessCustomerRequest {
   high_risk_activities?: string[];
   operate_in_prohibited_country?: boolean;
   accept_terms?: boolean;
-  how_did_you_come_across_stables?: string;
   entitlements?: EntitlementId[];
   metadata?: Record<string, string>;
 }
@@ -155,25 +155,112 @@ export interface UpdateCustomerRequest {
 
 export interface ListCustomersResponse {
   customers: Customer[];
+  /** Present only when a page size was sent. */
+  page?: { next_page_token: string; total: number };
 }
 
 // ============ VERIFICATION LINK TYPES ============
 
 export interface VerificationRedirect {
-  successUrl?: string;
-  rejectUrl?: string;
-  signKey?: string;
-  allowedQueryParams?: string[];
+  success_url?: string;
+  reject_url?: string;
+  sign_key?: string;
+  allowed_query_params?: string[];
 }
 
 export interface GenerateVerificationLinkRequest {
-  ttlInSecs?: number;
+  ttl_in_secs?: number;
   redirect?: VerificationRedirect;
+  verification_type?:
+    | "liveness"
+    | "passport"
+    | "source_of_wealth"
+    | "proof_of_address"
+    | "business_edd";
 }
 
 export interface GenerateVerificationLinkResponse {
   customer_id: string;
   kyc_link: string;
+}
+
+// ============ BALANCE / ENTITLEMENT / WHITELIST TYPES ============
+
+export type BalanceNetwork = "ethereum" | "polygon" | "solana" | "tron";
+
+export interface BalanceResponse {
+  balances: {
+    currency: string;
+    amount: string;
+    amount_minor: string;
+    available?: string;
+    pending?: string;
+    network: string;
+  }[];
+  transfers_enabled: boolean;
+}
+
+export interface BalanceWalletResponse {
+  status: "not_created" | "creating" | "active" | "failed";
+  wallet?: { address: string; network: string; currencies?: string[] } | null;
+}
+
+export interface BalanceDeposit {
+  id: string;
+  amount: string;
+  currency: string;
+  network: string | null;
+  tx_hash: string | null;
+  from_address: string | null;
+  status: string;
+  created_at: string;
+}
+
+export interface PendingBalanceDeposit {
+  id: string;
+  network: string | null;
+  currency: string;
+  amount: string;
+  from_address: string | null;
+  tx_hash: string | null;
+  reason: "sender_not_whitelisted" | "compliance_review";
+}
+
+export interface WhitelistedWallet {
+  id: string;
+  name: string;
+  network: BalanceNetwork;
+  address: string;
+  status: "pending_review" | "active" | "rejected" | "deactivated" | "archived";
+  rejection_reason: string | null;
+}
+
+export interface WhitelistedSourceAccount {
+  id: number;
+  account_name: string | null;
+  account_number: string;
+  bsb_number: string;
+  account_status: "enabled" | "disabled";
+}
+
+export interface EntitlementsResponse {
+  entitlements: {
+    name: string;
+    status: string;
+    phase?: string;
+    requirements?: { submitted?: string[]; missing?: string[] } & Record<string, unknown>;
+  }[];
+}
+
+/** snake_case paging query for the balance endpoints. */
+function pageQuery(params?: Record<string, string | number | undefined>): string {
+  const names: Record<string, string> = { pageSize: "page_size", pageToken: "page_token" };
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params ?? {})) {
+    if (value !== undefined && value !== "") search.set(names[key] ?? key, String(value));
+  }
+  const query = search.toString();
+  return query ? `?${query}` : "";
 }
 
 // ============ TRANSFER TYPES ============
@@ -227,7 +314,7 @@ export interface BankTransferDestination {
   account_number?: string;
   iban?: string;
   pay_id?: string;
-  pay_id_type?: "email" | "phone" | "abn" | "org_id";
+  pay_id_type?: "email" | "phone_number" | "abn" | "acn" | "organisation_id";
   account_type?: "savings" | "checking" | "payment";
   branch_name?: string;
   swift_code?: string;
@@ -294,6 +381,7 @@ export interface CreateTransferRequest {
   quote_id: string;
   destination: TransferDestination;
   purpose_code?: string;
+  funding_source?: "fund_transfer" | "prefund_balance";
   metadata?: Record<string, string>;
 }
 
@@ -372,7 +460,6 @@ export interface CreateVirtualAccountRequest {
   /** Required for fiat_to_crypto, which is the default. */
   destination?: VirtualAccountDestination;
   workflow_type?: "fiat_to_crypto" | "fiat_to_fiat";
-  developer_fee_percent?: string;
   metadata?: Record<string, string>;
 }
 
@@ -705,12 +792,20 @@ export class StablesApiClient {
 
   // ============ CUSTOMERS ============
 
-  async listCustomers(): Promise<ListCustomersResponse> {
-    return this.requestWithRetry<ListCustomersResponse>("/api/v1/customers");
+  async listCustomers(params?: {
+    pageSize?: number;
+    pageToken?: string;
+  }): Promise<ListCustomersResponse> {
+    return this.requestWithRetry<ListCustomersResponse>(`/api/v1/customers${pageQuery(params)}`);
   }
 
-  async getCustomer(customerId: string): Promise<Customer> {
-    return this.requestWithRetry<Customer>(`/api/v1/customers/${customerId}`);
+  /** `include` adds normalized verification data and/or document images; larger and slower. */
+  async getCustomer(
+    customerId: string,
+    include?: ("verification-profile" | "doc-images" | "all")[]
+  ): Promise<Customer> {
+    const query = include?.length ? `?include=${include.join(",")}` : "";
+    return this.requestWithRetry<Customer>(`/api/v1/customers/${customerId}${query}`);
   }
 
   async createCustomer(data: CreateCustomerRequest): Promise<Customer> {
@@ -756,10 +851,12 @@ export class StablesApiClient {
   async listAllVirtualAccounts(params?: {
     status?: string;
     limit?: number;
+    startingAfter?: string;
   }): Promise<ListVirtualAccountsResponse> {
     const searchParams = new URLSearchParams();
     if (params?.status) searchParams.set("status", params.status);
     if (params?.limit) searchParams.set("limit", params.limit.toString());
+    if (params?.startingAfter) searchParams.set("starting_after", params.startingAfter);
 
     const query = searchParams.toString();
     return this.requestWithRetry<ListVirtualAccountsResponse>(
@@ -769,11 +866,12 @@ export class StablesApiClient {
 
   async listVirtualAccounts(
     customerId: string,
-    params?: { status?: string; limit?: number }
+    params?: { status?: string; limit?: number; startingAfter?: string }
   ): Promise<ListVirtualAccountsResponse> {
     const searchParams = new URLSearchParams();
     if (params?.status) searchParams.set("status", params.status);
     if (params?.limit) searchParams.set("limit", params.limit.toString());
+    if (params?.startingAfter) searchParams.set("starting_after", params.startingAfter);
 
     const query = searchParams.toString();
     return this.requestWithRetry<ListVirtualAccountsResponse>(
@@ -929,14 +1027,15 @@ export class StablesApiClient {
    * discover what a corridor demands before spending a short-lived quote.
    */
   async validatePaymentMethod(
-    network: string,
-    destination: BankTransferDestination
+    network: "swift" | "bank" | "payid",
+    destination: BankTransferDestination,
+    quoteId?: string
   ): Promise<ValidatePaymentMethodResponse> {
     return this.requestWithRetry<ValidatePaymentMethodResponse>(
       "/api/v1/payment-methods/validate",
       {
         method: "POST",
-        body: JSON.stringify({ network, destination }),
+        body: JSON.stringify({ network, destination, ...(quoteId && { quote_id: quoteId }) }),
       }
     );
   }
@@ -1046,6 +1145,142 @@ export class StablesApiClient {
       method: "DELETE",
       headers: { "idempotency-key": this.generateIdempotencyKey() },
     });
+  }
+
+  // ============ ONBOARDING LINK ============
+
+  /**
+   * Create (or reuse, matched on email) a customer and return a hosted KYC link
+   * in one call. Fields supplied for an existing customer are ignored.
+   */
+  async createCustomerOnboardingLink(
+    data: Record<string, unknown>
+  ): Promise<{ customer_id: string; kyc_link: string; customer_created: boolean }> {
+    return this.requestWithRetry("/api/v1/customer/verification/link", {
+      method: "POST",
+      body: JSON.stringify(data),
+      headers: { "idempotency-key": this.generateIdempotencyKey() },
+    });
+  }
+
+  // ============ ENTITLEMENTS ============
+
+  async requestEntitlements(
+    customerId: string,
+    entitlements: string[]
+  ): Promise<EntitlementsResponse> {
+    return this.requestWithRetry<EntitlementsResponse>(
+      `/api/v1/customers/${customerId}/entitlements`,
+      {
+        method: "POST",
+        body: JSON.stringify({ entitlements }),
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
+      }
+    );
+  }
+
+  async updateEntitlementRequirements(
+    customerId: string,
+    entitlement: string,
+    requirements: Record<string, unknown>
+  ): Promise<EntitlementsResponse> {
+    return this.requestWithRetry<EntitlementsResponse>(
+      `/api/v1/customers/${customerId}/entitlements/${encodeURIComponent(entitlement)}/requirements`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(requirements),
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
+      }
+    );
+  }
+
+  // ============ PAYMENT ROUTE WHITELISTING (AUD) ============
+
+  async listRouteWhitelist(
+    customerId: string,
+    virtualAccountId: string
+  ): Promise<{ count: number; data: WhitelistedSourceAccount[] }> {
+    return this.requestWithRetry(
+      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/whitelist-accounts`
+    );
+  }
+
+  async addRouteWhitelistAccount(
+    customerId: string,
+    virtualAccountId: string,
+    sourceAccount: {
+      account_number: string;
+      bsb_number: string;
+      account_status?: "enabled" | "disabled";
+    }
+  ): Promise<WhitelistedSourceAccount> {
+    return this.requestWithRetry<WhitelistedSourceAccount>(
+      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/whitelist-accounts`,
+      {
+        method: "POST",
+        body: JSON.stringify({ source_account: sourceAccount }),
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
+      }
+    );
+  }
+
+  async updateRouteWhitelistAccount(
+    customerId: string,
+    virtualAccountId: string,
+    sourceAccountId: number,
+    data: { account_number: string; bsb_number: string; account_status: "enabled" | "disabled" }
+  ): Promise<WhitelistedSourceAccount> {
+    return this.requestWithRetry<WhitelistedSourceAccount>(
+      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/whitelist-accounts/${sourceAccountId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
+      }
+    );
+  }
+
+  // ============ BALANCES ============
+  // The API paths say "prefund"; the docs and dashboard call it the balance.
+
+  async getBalance(): Promise<BalanceResponse> {
+    return this.requestWithRetry<BalanceResponse>("/api/v1/prefund/balance");
+  }
+
+  async getBalanceWallet(network?: BalanceNetwork): Promise<BalanceWalletResponse> {
+    return this.requestWithRetry<BalanceWalletResponse>(
+      `/api/v1/prefund/wallet${network ? `?network=${network}` : ""}`
+    );
+  }
+
+  /** Asynchronous: answers `creating` first; safe to repeat while in flight. */
+  async createBalanceWallet(network: BalanceNetwork): Promise<BalanceWalletResponse> {
+    return this.requestWithRetry<BalanceWalletResponse>("/api/v1/prefund/wallet", {
+      method: "POST",
+      body: JSON.stringify({ network }),
+      headers: { "idempotency-key": this.generateIdempotencyKey() },
+    });
+  }
+
+  async listBalanceActivity(params?: {
+    network?: BalanceNetwork;
+    pageSize?: number;
+    pageToken?: string;
+  }): Promise<{ data: BalanceDeposit[]; next_page_token?: string | null }> {
+    return this.requestWithRetry(`/api/v1/prefund/activity${pageQuery(params)}`);
+  }
+
+  async listPendingBalanceDeposits(): Promise<{ data: PendingBalanceDeposit[] }> {
+    return this.requestWithRetry("/api/v1/prefund/deposits/pending");
+  }
+
+  async listWhitelistedWallets(params?: {
+    network?: BalanceNetwork;
+    status?: string;
+    pageSize?: number;
+    pageToken?: string;
+  }): Promise<{ data: WhitelistedWallet[]; next_page_token?: string | null }> {
+    return this.requestWithRetry(`/api/v1/prefund/whitelisted-wallets${pageQuery(params)}`);
   }
 }
 
