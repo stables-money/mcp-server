@@ -30,6 +30,7 @@
     "format:check": "prettier --check 'src/**/*.ts'",
     "prepublishOnly": "npm run build",
     "check:spec": "node scripts/check-spec-drift.mjs",
+    "check:release": "node scripts/check-release-state.mjs",
     "docs:reference": "node scripts/generate-tool-reference.mjs > docs/tool-reference.md",
     "version:sync": "node scripts/write-version.mjs",
     "version": "npm run version:sync && git add src/version.ts"

@@ -1,0 +1,38 @@
+name: Freshness
+
+# CI only runs when this repo changes, but the server goes stale in two ways
+# that need no commit here: the API moves under it, or a release half-fails and
+# npm / the hosted server stop matching main. This runs daily and fails loudly
+# (GitHub emails on a failed scheduled run) when either happens.
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The release check diffs src/ against the published tag.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # On a schedule an unreachable spec is worth knowing about, not skipping.
+      - name: Check for API spec drift
+        run: npm run check:spec
+        env:
+          STABLES_SPEC_STRICT: "1"
+
+      - name: Check npm, releases and the hosted server match main
+        if: always()
+        run: npm run check:release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -50,7 +50,13 @@ try {
   spec = await response.json();
 } catch (error) {
   // A network or gateway problem is not drift. Say so and pass, rather than
-  // failing a build for something unrelated to the change under test.
+  // failing a build for something unrelated to the change under test. The
+  // scheduled freshness run sets STABLES_SPEC_STRICT, since there nothing else
+  // would notice the spec going away.
+  if (process.env.STABLES_SPEC_STRICT) {
+    console.error(`Could not read the spec (${error.message}).`);
+    process.exit(1);
+  }
   console.error(`Could not read the spec (${error.message}). Skipping the drift check.`);
   process.exit(0);
 }
