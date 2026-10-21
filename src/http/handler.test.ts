@@ -145,6 +145,18 @@ describe("handleRequest", () => {
     expect(String(fetchSpy.mock.calls[0][0])).toBe("https://api.stables.money/api/v1/customers");
   });
 
+  it("declines the SSE stream with 405 instead of opening one that closes at once", async () => {
+    const res = await handleRequest(
+      new Request(`${ORIGIN}/mcp`, {
+        method: "GET",
+        headers: { accept: "text/event-stream", authorization: `Bearer ${TEST_KEY}` },
+      })
+    );
+    expect(res.status).toBe(405);
+    expect(res.headers.get("allow")).toBe("POST, OPTIONS");
+    expect(res.headers.get("content-type")).toBe("application/json");
+  });
+
   it("404s on unknown paths and points at the endpoint", async () => {
     const res = await handleRequest(new Request(`${ORIGIN}/sse`));
     expect(res.status).toBe(404);
