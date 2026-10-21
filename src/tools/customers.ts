@@ -242,6 +242,44 @@ function buildCustomerBody(params: CustomerParams): Record<string, unknown> {
   return requestBody;
 }
 
+/** Fields get_customer always prints, or that are not customer data. */
+const SUMMARY_FIELDS = new Set([
+  "customer_id",
+  "external_customer_id",
+  "status",
+  "email",
+  "customer_type",
+  "first_name",
+  "last_name",
+  "company_name",
+  "phone",
+  "entitlements",
+  "verification_levels",
+  "created_at",
+  "updated_at",
+]);
+
+/**
+ * `include` flattens the verification profile onto the customer (date_of_birth,
+ * nationality, address and so on) and adds doc_images. Print whatever came
+ * back rather than a fixed list: the published spec does not list these
+ * fields, so a fixed list would be a guess. Images are counted, not dumped.
+ */
+function describeIncluded(customer: Record<string, unknown>): string {
+  const extra = Object.entries(customer).filter(
+    ([key, value]) => !SUMMARY_FIELDS.has(key) && value !== null && value !== undefined
+  );
+  if (extra.length === 0) {
+    return "\n\nVerification profile: nothing on file yet (it fills in as verification is submitted).";
+  }
+  const lines = extra.map(([key, value]) =>
+    key === "doc_images" && Array.isArray(value)
+      ? `${key}: ${value.length} image(s)`
+      : `${key}: ${typeof value === "object" ? JSON.stringify(value) : String(value)}`
+  );
+  return `\n\nVerification profile:\n${lines.join("\n")}`;
+}
+
 export function registerCustomerTools(server: McpServer, client: StablesApiClient) {
   // Create Customer
   server.tool(
@@ -394,7 +432,7 @@ Entitlements: ${entitlementsList}
 Verification Status: ${verificationStatus}
 Can Transfer: ${isVerified ? "Yes" : "No - needs KYC verification"}
 Created: ${customer.created_at}
-Updated: ${customer.updated_at}`,
+Updated: ${customer.updated_at}${include?.length ? describeIncluded(customer as unknown as Record<string, unknown>) : ""}`,
             },
           ],
         };
