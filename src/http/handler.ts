@@ -113,7 +113,10 @@ export async function handleRequest(request: Request): Promise<Response> {
     if (request.method === "GET") {
       return withCors(
         json(
-          { error: "method_not_allowed", message: "This server has no SSE stream. Send JSON-RPC with POST." },
+          {
+            error: "method_not_allowed",
+            message: "This server has no SSE stream. Send JSON-RPC with POST.",
+          },
           405,
           { allow: "POST, OPTIONS" }
         )
