@@ -1,9 +1,9 @@
 # Changelog
 
-## [Unreleased]
+## [2.3.0] - 2026-10-21
 
 The server now mirrors docs.stables.money, and a contract test keeps it that
-way. Release as 2.3.0.
+way.
 
 ### Added
 - **Balances:** `get_balance`, `get_balance_wallet`, `create_balance_wallet`,
