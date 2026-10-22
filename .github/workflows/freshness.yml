@@ -24,6 +24,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+
+      # check:spec runs vitest, so the dev dependencies have to be installed.
+      - run: npm ci
 
       # On a schedule an unreachable spec is worth knowing about, not skipping.
       - name: Check for API spec drift
