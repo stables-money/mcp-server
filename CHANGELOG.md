@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.4.0] - 2026-10-22
 
 Covers every endpoint now documented on docs.stables.money (51 tools), and
 tests the tools against sandbox.
