@@ -403,6 +403,119 @@ Change or disable a whitelisted source account on an AUD payment route. Send the
 | `accountNumber` | string | Yes | Source account number |
 | `enabled` | boolean | Yes | false to stop accepting deposits from it |
 
+#### register_route_payid
+
+Register a PayID for an activated AUD payment route, so payers can send to an email-style alias instead of a BSB and account number. Calling it again on a route that already has one returns the existing PayID.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `customerId` | string | Yes | The customer ID |
+| `virtualAccountId` | string | Yes | The AUD payment route (virtual account) ID |
+
+### Compliance requests (RFIs)
+
+#### list_rfis
+
+List the organisation's compliance requests for information (RFIs), newest first: what Stables compliance needs before it releases a held payment or verification. Open and submitted ones by default. Check this when a transfer or deposit is held, or subscribe to the rfi.* webhooks.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `status` | array of `open` \| `submitted` \| `satisfied` \| `expired` \| `waived` \| `rejected` | No | Only these statuses (default: open and submitted) |
+| `type` | array of `verification` \| `transaction` \| `manual` | No | Only these RFI types |
+| `customerId` | string | No | Only this customer's RFIs |
+| `transactionReferenceId` | string | No | Only RFIs about this transfer or deposit |
+| `limit` | integer | No | Results per page |
+| `cursor` | string | No | next_cursor from the previous page |
+
+#### list_customer_rfis
+
+List one customer's compliance requests for information (RFIs), with what each requirement needs next.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `customerId` | string | Yes | The customer ID |
+| `status` | `open` \| `submitted` \| `satisfied` \| `expired` \| `waived` \| `rejected` | No | Only this status |
+
+#### get_rfi
+
+Get one compliance request for information (RFI): why it was raised, its requirements and how to answer each.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `rfiId` | string | Yes | The RFI ID |
+
+#### get_rfi_evidence_form
+
+Get the form an `evidence` requirement on an RFI asks for (for example the source of funds behind one held payment), with the current submission if one was sent. Build the submit_rfi_evidence answers from its fields and documents.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `customerId` | string | Yes | The customer ID |
+| `rfiId` | string | Yes | The RFI ID |
+| `requirementId` | string | Yes | The requirement ID (type 'evidence') |
+
+#### submit_rfi_evidence
+
+Submit the answers and documents an `evidence` requirement asks for, in one request, keyed as get_rfi_evidence_form lists them. Files are base64 data URLs ('data:application/pdf;base64,...'). The requirement moves to 'submitted' for Stables compliance to review; approving it releases the held payment once nothing else is outstanding. Confirm the content with a human before sending: it goes to compliance as the customer's answer.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `customerId` | string | Yes | The customer ID |
+| `rfiId` | string | Yes | The RFI ID |
+| `requirementId` | string | Yes | The requirement ID (type 'evidence') |
+| `answers` | object | Yes | Answers keyed by the form's field keys and document wire_field names, e.g. { funds_origin, funds_origin_explanation, supporting_documents: ['data:application/pdf;base64,...'] } |
+
+#### get_kyc_capabilities
+
+List the verification capabilities a customer holds (for example proof_of_address), the level that granted each, and when. A `kyc_capability` requirement on an RFI is satisfied once the customer holds that capability.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `customerId` | string | Yes | The customer ID |
+
+### Documents
+
+#### add_document
+
+Attach a supporting document (invoice, contract or other) to a transfer or a payment route deposit, for example when Stables compliance asks for one. The file goes as a base64 data URL ('data:application/pdf;base64,...').
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `on` | `transfer` \| `deposit` | Yes | What the document belongs to: a transfer, or a deposit on a payment route |
+| `transactionId` | string | Yes | The transfer ID, or the deposit ID from get_virtual_account_history |
+| `fileName` | string | Yes | File name shown to Stables, e.g. 'invoice-2041.pdf' |
+| `base64Url` | string | Yes | The file as a data URL: 'data:<mime>;base64,<data>' |
+| `type` | `invoice` \| `contract` \| `other` | No | What the document is (default other) |
+
+#### list_documents
+
+List the documents attached to a transfer or a payment route deposit, newest first.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `on` | `transfer` \| `deposit` | Yes | What the document belongs to: a transfer, or a deposit on a payment route |
+| `transactionId` | string | Yes | The transfer ID, or the deposit ID from get_virtual_account_history |
+
+#### get_document_download_url
+
+Get a short-lived link to download a document attached to a transfer or a payment route deposit.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `on` | `transfer` \| `deposit` | Yes | What the document belongs to: a transfer, or a deposit on a payment route |
+| `transactionId` | string | Yes | The transfer ID, or the deposit ID from get_virtual_account_history |
+| `documentId` | string | Yes | The document ID from list_documents |
+
+#### delete_document
+
+Remove a document from a transfer or a payment route deposit. This cannot be undone, so confirm with a human first.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `on` | `transfer` \| `deposit` | Yes | What the document belongs to: a transfer, or a deposit on a payment route |
+| `transactionId` | string | Yes | The transfer ID, or the deposit ID from get_virtual_account_history |
+| `documentId` | string | Yes | The document ID from list_documents |
+
 ### Balances
 
 #### get_balance

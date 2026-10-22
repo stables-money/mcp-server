@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.4.0] - 2026-10-22
+
+Covers every endpoint now documented on docs.stables.money (51 tools), and
+tests the tools against sandbox.
+
+### Added
+- **Compliance requests (RFIs):** `list_rfis`, `list_customer_rfis`, `get_rfi`,
+  `get_rfi_evidence_form`, `submit_rfi_evidence`, and `get_kyc_capabilities`.
+  Each RFI requirement is rendered with what to do next.
+- **Documents:** `add_document`, `list_documents`, `get_document_download_url`,
+  `delete_document`, on a transfer or a payment route deposit.
+- `register_route_payid`: register a PayID on an AUD payment route.
+- **End-to-end test** (`src/e2e.test.ts`, `npm run test:e2e`): connects an MCP
+  client to the server and calls the tools against sandbox, failing on any
+  error or broken render. Reads, plus round trips it undoes (a webhook, a
+  document); never moves money; refuses a live key. Runs in CI with the
+  `STABLES_SANDBOX_API_KEY` secret and skips without it.
+
+### Fixed
+- `delete_webhook` and `revoke_api_key` failed against the live API (HTTP 415):
+  the API refuses a DELETE with no body. The client now sends an empty JSON
+  body on DELETE. Found by the new end-to-end test.
+- The contract test read docs.stables.money's GitBook layout and crashed after
+  the move to the new docs site (`llms.txt has no "API Reference" section`),
+  failing CI. It now reads the new `llms.txt` and each reference page's
+  `<APIPage>` operations, and a layout it can't read fails loudly instead of
+  passing.
+- Operations the docs now document are no longer listed as deliberately
+  undocumented.
+
 ## [2.3.0] - 2026-10-21
 
 The server now mirrors docs.stables.money, and a contract test keeps it that

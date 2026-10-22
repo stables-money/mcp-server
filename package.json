@@ -1,6 +1,6 @@
 {
   "name": "stables-mcp-server",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "MCP server for the Stables fiat-to-crypto API, hosted at mcp.stables.money or run locally - enables AI agents to manage customers, quotes, transfers and payment routes",
   "type": "module",
   "main": "build/index.js",
@@ -30,6 +30,7 @@
     "format:check": "prettier --check 'src/**/*.ts'",
     "prepublishOnly": "npm run build",
     "check:spec": "node scripts/fetch-reference.mjs && vitest run src/contract.test.ts",
+    "test:e2e": "vitest run src/e2e.test.ts",
     "check:release": "node scripts/check-release-state.mjs",
     "docs:reference": "node scripts/generate-tool-reference.mjs > docs/tool-reference.md",
     "version:sync": "node scripts/write-version.mjs",

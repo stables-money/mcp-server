@@ -510,15 +510,122 @@ export interface VirtualAccountHistoryResponse {
  */
 export interface Rfi {
   rfi_id: string;
-  type: string;
-  status: string;
+  type: "verification" | "transaction" | "manual";
+  status: RfiStatus;
   customer_id: string;
+  /** "customer", or "payment" when the RFI is about one held transfer or deposit. */
+  subject: "customer" | "payment";
   kyc_level?: string;
-  reasons?: unknown[];
-  requirements?: unknown[];
+  transaction_reference_id?: string;
+  transaction_type?: "transfer" | "virtual_account";
+  transfer_id?: string;
+  virtual_account_id?: string;
+  reasons: { reason_code: string; description: string }[];
+  message?: string;
+  requirements: RfiRequirement[];
+  billable: boolean;
+  rejection_reason?: string;
   created_at: string;
   expires_at?: string;
   resolved_at?: string;
+}
+
+export type RfiStatus = "open" | "submitted" | "satisfied" | "expired" | "waived" | "rejected";
+
+/**
+ * One item an RFI asks for. `type` says how to answer it: `kyc_level` and
+ * `kyc_capability` through a verification link (`action.verification_type`),
+ * `evidence` through submit_rfi_evidence, and `manual_review` needs nothing.
+ */
+export interface RfiRequirement {
+  requirement_id: string;
+  type: "kyc_level" | "kyc_capability" | "manual_review" | "evidence";
+  status: "pending" | "submitted" | "satisfied" | "waived";
+  required_level?: string;
+  required_capability?: string;
+  required_evidence?: "source_of_funds" | "ad_hoc";
+  label?: string;
+  instructions?: string;
+  answer_type?: "text" | "document";
+  rejection_reason?: string;
+  action?: { kind: string; verification_type?: string; form?: string; submit?: string };
+}
+
+export interface ListRfisParams {
+  status?: RfiStatus[];
+  type?: Rfi["type"][];
+  customerId?: string;
+  transactionReferenceId?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+/** The form an `evidence` requirement asks the customer to fill in, with what was sent so far. */
+export interface RfiEvidence {
+  rfi_id: string;
+  requirement_id: string;
+  customer_id: string;
+  required_evidence: "source_of_funds" | "ad_hoc";
+  status: "pending" | "submitted" | "satisfied" | "waived";
+  answerable: boolean;
+  rejection_reason?: string;
+  form: {
+    title?: string;
+    description?: string;
+    fields?: {
+      key: string;
+      label: string;
+      type: string;
+      required: boolean;
+      description?: string;
+    }[];
+    documents?: {
+      wire_field: string;
+      label: string;
+      required: boolean;
+      description?: string;
+      min_count?: number;
+      max_count?: number;
+    }[];
+  };
+  submission?: Record<string, unknown> | null;
+}
+
+export interface KycCapabilities {
+  customer_id: string;
+  capabilities: { capability: string; kyc_level: string; status: string; granted_at: string }[];
+}
+
+// ============ TRANSACTION DOCUMENT TYPES ============
+
+/** Documents attach to a transfer or to a payment route deposit. */
+export type DocumentOwner = "transfer" | "deposit";
+
+export interface TransactionDocument {
+  document_id: string;
+  transaction_id: string;
+  transaction_type: "transfer" | "payment_route";
+  type: "invoice" | "contract" | "other";
+  file_name: string;
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
+}
+
+export interface DocumentDownload {
+  url: string;
+  file_name: string;
+  content_type: string;
+  expires_in: number;
+}
+
+export interface PayIdRegistration {
+  pay_id: string;
+  already_registered?: boolean;
+  status?: string;
+  status_description?: string;
+  pay_id_name?: string;
+  pay_id_status?: string;
 }
 
 // ============ WEBHOOK DELIVERY TYPES ============
@@ -689,6 +796,12 @@ export class StablesApiClient {
       Authorization: `Bearer ${this.apiKey}`,
       ...(options.headers as Record<string, string>),
     };
+
+    // The API refuses a DELETE with no body (415: the gateway gives it a form content
+    // type). An empty JSON object passes and is ignored.
+    if (options.method === "DELETE" && !options.body) {
+      options = { ...options, body: "{}" };
+    }
 
     if (options.body) {
       headers["Content-Type"] = "application/json";
@@ -1056,18 +1169,119 @@ export class StablesApiClient {
     );
   }
 
-  /** Compliance requests for information against a customer. */
-  async listCustomerRfis(customerId: string): Promise<{ rfis: Rfi[] }> {
-    return this.requestWithRetry<{ rfis: Rfi[] }>(`/api/v1/customers/${customerId}/rfis`);
+  /** Register a PayID for an activated AUD payment route. */
+  async registerPayId(customerId: string, virtualAccountId: string): Promise<PayIdRegistration> {
+    return this.requestWithRetry<PayIdRegistration>(
+      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/payid`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
+      }
+    );
+  }
+
+  // Supporting documents (invoices, contracts) on a transfer or a payment route deposit.
+  // These routes take no Idempotency-Key.
+
+  async addDocument(
+    owner: DocumentOwner,
+    transactionId: string,
+    document: { file_name: string; base64_url: string; type?: TransactionDocument["type"] }
+  ): Promise<{ document: TransactionDocument }> {
+    return this.requestWithRetry<{ document: TransactionDocument }>(
+      `/api/v1/${owner}s/${transactionId}/documents`,
+      { method: "POST", body: JSON.stringify(document) }
+    );
+  }
+
+  async listDocuments(
+    owner: DocumentOwner,
+    transactionId: string
+  ): Promise<{ documents: TransactionDocument[] }> {
+    return this.requestWithRetry<{ documents: TransactionDocument[] }>(
+      `/api/v1/${owner}s/${transactionId}/documents`
+    );
+  }
+
+  async getDocumentDownloadUrl(
+    owner: DocumentOwner,
+    transactionId: string,
+    documentId: string
+  ): Promise<DocumentDownload> {
+    return this.requestWithRetry<DocumentDownload>(
+      `/api/v1/${owner}s/${transactionId}/documents/${documentId}/download-url`
+    );
+  }
+
+  async deleteDocument(
+    owner: DocumentOwner,
+    transactionId: string,
+    documentId: string
+  ): Promise<{ deleted: boolean }> {
+    return this.requestWithRetry<{ deleted: boolean }>(
+      `/api/v1/${owner}s/${transactionId}/documents/${documentId}`,
+      { method: "DELETE" }
+    );
+  }
+
+  /** Compliance requests for information across the organisation; open ones by default. */
+  async listRfis(params: ListRfisParams = {}): Promise<{ rfis: Rfi[]; next_cursor?: string }> {
+    const query = new URLSearchParams();
+    if (params.status?.length) query.set("status", params.status.join(","));
+    if (params.type?.length) query.set("type", params.type.join(","));
+    if (params.customerId) query.set("customerId", params.customerId);
+    if (params.transactionReferenceId)
+      query.set("transactionReferenceId", params.transactionReferenceId);
+    if (params.limit) query.set("limit", String(params.limit));
+    if (params.cursor) query.set("cursor", params.cursor);
+    const qs = query.toString();
+    return this.requestWithRetry<{ rfis: Rfi[]; next_cursor?: string }>(
+      `/api/v1/rfis${qs ? `?${qs}` : ""}`
+    );
+  }
+
+  /** Compliance requests for information against one customer. */
+  async listCustomerRfis(customerId: string, status?: RfiStatus): Promise<{ rfis: Rfi[] }> {
+    const query = status ? `?status=${status}` : "";
+    return this.requestWithRetry<{ rfis: Rfi[] }>(`/api/v1/customers/${customerId}/rfis${query}`);
   }
 
   async getRfi(rfiId: string): Promise<Rfi> {
     return this.requestWithRetry<Rfi>(`/api/v1/rfis/${rfiId}`);
   }
 
-  /** What verification the customer still owes. */
-  async getKycCapabilities(customerId: string): Promise<Record<string, unknown>> {
-    return this.requestWithRetry<Record<string, unknown>>(
+  /** The form an `evidence` requirement asks for, with the current submission if one was sent. */
+  async getRfiEvidence(
+    customerId: string,
+    rfiId: string,
+    requirementId: string
+  ): Promise<RfiEvidence> {
+    return this.requestWithRetry<RfiEvidence>(
+      `/api/v1/customers/${customerId}/rfis/${rfiId}/requirements/${requirementId}/evidence`
+    );
+  }
+
+  /** Answers and documents for an `evidence` requirement, keyed as its form lists them. */
+  async submitRfiEvidence(
+    customerId: string,
+    rfiId: string,
+    requirementId: string,
+    answers: Record<string, unknown>
+  ): Promise<{ rfi: Rfi }> {
+    return this.requestWithRetry<{ rfi: Rfi }>(
+      `/api/v1/customers/${customerId}/rfis/${rfiId}/requirements/${requirementId}/evidence`,
+      {
+        method: "POST",
+        body: JSON.stringify(answers),
+        headers: { "idempotency-key": this.generateIdempotencyKey() },
+      }
+    );
+  }
+
+  /** The verification capabilities a customer holds, such as proof_of_address. */
+  async getKycCapabilities(customerId: string): Promise<KycCapabilities> {
+    return this.requestWithRetry<KycCapabilities>(
       `/api/v1/customer/${customerId}/kyc-capabilities`
     );
   }

@@ -10,7 +10,7 @@ MCP (Model Context Protocol) is an open standard that provides a standardized wa
 
 ## Features
 
-This MCP server provides 40 tools across 9 categories, one for every operation documented on [docs.stables.money](https://docs.stables.money) (a contract test checks this, see below):
+This MCP server provides 51 tools across 11 categories, one for every operation documented on [docs.stables.money](https://docs.stables.money) (a contract test checks this, see below):
 
 ### Customer Management
 - `create_customer` - Create individual or business customers
@@ -26,6 +26,20 @@ This MCP server provides 40 tools across 9 categories, one for every operation d
 - `request_entitlements` - Apply for entitlements (e.g. `aed_local`) for an existing customer
 - `submit_entitlement_requirements` - Send the extra verification Stables asks for
 
+### Compliance requests (RFIs)
+- `list_rfis` - The organisation's RFIs: what compliance needs before it releases a held payment or verification
+- `list_customer_rfis` - One customer's RFIs
+- `get_rfi` - One RFI, its requirements and how to answer each
+- `get_rfi_evidence_form` - The form an `evidence` requirement asks for
+- `submit_rfi_evidence` - Send the answers and documents for an `evidence` requirement
+- `get_kyc_capabilities` - Verification capabilities a customer holds
+
+### Documents
+- `add_document` - Attach an invoice, contract or other document to a transfer or a deposit
+- `list_documents` - Documents on a transfer or a deposit
+- `get_document_download_url` - Short-lived download link for a document
+- `delete_document` - Remove a document
+
 ### Quotes
 - `create_quote` - Get exchange rate quotes (USDC/USDT to fiat)
 - `get_quote` - Check quote status and details
@@ -40,6 +54,7 @@ This MCP server provides 40 tools across 9 categories, one for every operation d
 - `create_virtual_account` - Create virtual bank accounts for fiat deposits
 - `list_virtual_accounts` - List virtual accounts for a customer, or across all customers
 - `update_virtual_account` - Update virtual account settings
+- `register_route_payid` - Register a PayID on an AUD payment route
 - `get_virtual_account_history` - Get deposits and their payouts for a payment route
 - `update_route_destination` - Change the payout wallet on an existing route
 - `list_route_whitelist` / `add_route_whitelist_account` / `update_route_whitelist_account` - Source-account whitelisting for AUD routes
@@ -287,9 +302,11 @@ stables-mcp-server/
 │   └── tools/
 │       ├── customers.ts      # Customer management tools (7)
 │       ├── entitlements.ts   # Entitlement tools (3)
+│       ├── compliance.ts     # RFI and KYC capability tools (6)
+│       ├── documents.ts      # Transfer and deposit document tools (4)
 │       ├── quotes.ts         # Quote tools (2)
 │       ├── transfers.ts      # Transfer tools (4)
-│       ├── virtual-accounts.ts # Payment route tools (8)
+│       ├── virtual-accounts.ts # Payment route tools (9)
 │       ├── balances.ts       # Balance tools (6)
 │       ├── api-keys.ts       # API key tools (4)
 │       ├── webhooks.ts       # Webhook tools (3)

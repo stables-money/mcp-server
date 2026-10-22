@@ -4,15 +4,17 @@
  *
  *   - What is documented: every operation on the API Reference pages of
  *     docs.stables.money, plus every "METHOD /api/v1/..." the guides name
- *     (Balances and Entitlements are documented only in the guides). The MCP
- *     mirrors the docs, so a documented operation with no tool is a missing
- *     feature.
- *   - What the API accepts: the live OpenAPI spec. Sandbox runs the same `main`
+ *     (Entitlements are documented only in the guides). The MCP mirrors the
+ *     docs, so a documented operation with no tool is a missing feature.
+ *     Pages are read as markdown (<page>.md); a reference page names its
+ *     operations in an <APIPage operations={[...]}> element.
+ *   - What the API accepts: the live OpenAPI spec. Sandbox runs the same release
  *     as production, and production's /docs is behind the gateway (403).
  *
  * Writes reference/spec.json and reference/docs-operations.json (gitignored).
  * Exits 0 without writing anything if either source is unreachable, unless
- * STABLES_SPEC_STRICT is set (the scheduled freshness run).
+ * STABLES_SPEC_STRICT is set (the scheduled freshness run). A docs layout this
+ * script no longer understands fails it: that is a broken check, not an outage.
  *
  * Run: npm run check:spec (fetches, then runs the contract test)
  */
@@ -20,19 +22,10 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 
 const SPEC_URL = process.env.STABLES_SPEC_URL || "https://api.sandbox.stables.money/docs/json";
-const DOCS_URL = process.env.STABLES_DOCS_URL || "https://docs.stables.money";
-
-/**
- * Pages whose operation GitBook does not render, because the spec uploaded to
- * GitBook predates the endpoint. Their markdown has no "## METHOD /path"
- * heading, so the operation is taken from the docs repo instead. Each one is
- * reported, since it means the published reference shows no schema; the fix is
- * re-uploading the spec in GitBook, after which the entry can go.
- */
-const UNRENDERED = {
-  "api-reference/balances/get-balance": [["GET", "/api/v1/prefund/balance"]],
-  "api-reference/balances/list-whitelisted-wallets": [["GET", "/api/v1/prefund/whitelisted-wallets"]],
-};
+// The same build as docs.stables.money, served from the Cloudflare Pages domain. The
+// stables.money zone's bot protection answers GitHub's runners with 403, which made
+// this check skip itself in CI; pages.dev is outside that zone.
+const DOCS_URL = process.env.STABLES_DOCS_URL || "https://stables-docs.pages.dev";
 
 async function get(url, as) {
   const response = await fetch(url, { headers: { "user-agent": "stables-mcp-server contract check" } });
@@ -54,12 +47,25 @@ try {
   process.exit(0);
 }
 
-const sections = index.split(/^## /m);
-const linksIn = (title) => {
-  const section = sections.find((part) => part.startsWith(title));
-  if (!section) throw new Error(`${DOCS_URL}/llms.txt has no "${title}" section`);
-  return [...section.matchAll(/\]\((https:\/\/[^)]+\.md)\)/g)].map((m) => m[1]);
-};
+/**
+ * llms.txt lists each section as a top-level "- Title" bullet, with its pages
+ * as relative links nested under it.
+ */
+function linksIn(title) {
+  const links = [];
+  let section;
+  for (const line of index.split("\n")) {
+    const heading = line.match(/^- (?!\[)(.+?)\s*$/);
+    if (heading) section = heading[1];
+    const link = line.match(/\]\((\/[^)\s]*)\)/);
+    if (link && section === title) links.push(new URL(`${link[1]}.md`, DOCS_URL).href);
+  }
+  if (links.length === 0) {
+    console.error(`${DOCS_URL}/llms.txt has no "${title}" section; the docs layout changed.`);
+    process.exit(1);
+  }
+  return links;
+}
 const pages = linksIn("API Reference");
 const guides = [...linksIn("Get Started"), ...linksIn("Developer Platform")];
 
@@ -77,19 +83,16 @@ function specPath(method, written) {
 }
 
 const operations = [];
-const unrendered = [];
+const add = (method, path, page) => {
+  if (!operations.some((o) => o.method === method && o.path === path)) operations.push({ method, path, page });
+};
+
 for (const url of pages) {
   const page = new URL(url).pathname.replace(/^\//, "").replace(/\.md$/, "");
   const markdown = await get(url, "text");
-  const found = [...markdown.matchAll(/^## (GET|POST|PUT|PATCH|DELETE) (\/\S+)$/gm)].map((m) => [
-    m[1],
-    m[2],
-  ]);
-  if (found.length === 0 && UNRENDERED[page]) {
-    unrendered.push(page);
-    found.push(...UNRENDERED[page]);
+  for (const m of markdown.matchAll(/<APIPage[^>]*operations=\{(\[.*?\])\}/g)) {
+    for (const op of JSON.parse(m[1])) add(op.method.toUpperCase(), op.path, page);
   }
-  for (const [method, path] of found) operations.push({ method, path, page });
 }
 
 for (const url of guides) {
@@ -97,9 +100,7 @@ for (const url of guides) {
   const markdown = await get(url, "text");
   for (const m of markdown.matchAll(/\b(GET|POST|PUT|PATCH|DELETE) `?(\/api\/v1\/[\w/{}:.-]+)/g)) {
     const path = specPath(m[1], m[2]);
-    if (path && !operations.some((o) => o.method === m[1] && o.path === path)) {
-      operations.push({ method: m[1], path, page });
-    }
+    if (path) add(m[1], path, page);
   }
 }
 
@@ -107,7 +108,7 @@ mkdirSync("reference", { recursive: true });
 writeFileSync("reference/spec.json", JSON.stringify(spec));
 writeFileSync(
   "reference/docs-operations.json",
-  JSON.stringify({ source: DOCS_URL, specVersion: spec.info?.version, operations, unrendered }, null, 2)
+  JSON.stringify({ source: DOCS_URL, specVersion: spec.info?.version, operations }, null, 2)
 );
 
 const pagesWithout = pages.length - new Set(operations.map((o) => o.page)).size;
@@ -115,8 +116,3 @@ console.log(
   `Spec ${spec.info?.version} from ${SPEC_URL}; ${operations.length} documented operations on ${pages.length} pages.`
 );
 if (pagesWithout > 0) console.log(`${pagesWithout} reference page(s) document no operation.`);
-for (const page of unrendered) {
-  console.warn(
-    `warning: ${DOCS_URL}/${page} renders no schema; GitBook's uploaded spec is missing it. Re-upload the spec in GitBook.`
-  );
-}

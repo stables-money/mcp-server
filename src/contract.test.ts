@@ -36,18 +36,7 @@ type Operation = { method: string; path: string; page?: string };
  * and deployed; listing it here is a statement that we expose it on purpose.
  * A new undocumented call fails the test until it is added, with a reason.
  */
-const UNDOCUMENTED_ON_PURPOSE: Record<string, string> = {
-  "GET /api/v1/quotes/{quoteId}": "re-read a quote before transferring",
-  "GET /api/v1/transfers/{transferId}": "poll one transfer's status",
-  "PUT /api/v1/customers/{customerId}/metadata": "documented as part of Update Customer",
-  "POST /api/v1/customer/{customerId}/verification/link": "KYC link for an existing customer",
-  "PATCH /api/v1/customers/{customerId}/virtual-accounts/{virtualAccountId}":
-    "set deposit_handling_mode on a route",
-  "GET /api/v1/webhooks/deliveries": "debug webhook delivery",
-  "POST /api/v1/customers/{customerId}/virtual-accounts/{virtualAccountId}/sandbox/simulate-deposit":
-    "sandbox testing",
-  "POST /api/v1/transfers/{transferId}/sandbox/simulate-deposit": "sandbox testing",
-};
+const UNDOCUMENTED_ON_PURPOSE: Record<string, string> = {};
 
 /**
  * Documented operations with no tool, on purpose. Empty is the goal; an entry
@@ -256,7 +245,7 @@ type Captured = { method: string; url: URL; headers: Record<string, string>; bod
 
 describe.skipIf(!haveReference)("contract with docs.stables.money and the live API", () => {
   let spec: Json;
-  let docs: { operations: Operation[]; unrendered: string[]; specVersion: string };
+  let docs: { operations: Operation[]; specVersion: string };
   let client: Client;
   let tools: { name: string; inputSchema: Json }[];
   let captured: Captured[] = [];

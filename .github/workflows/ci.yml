@@ -53,3 +53,13 @@ jobs:
       # so an unrelated outage cannot fail a build.
       - name: Contract test against the docs and the live API
         run: npm run check:spec
+
+      # The contract test captures fetch, so it proves the requests and nothing
+      # about the tools working. This calls the tools over MCP against sandbox
+      # (reads, plus round trips it undoes). It needs the STABLES_SANDBOX_API_KEY
+      # secret, a sandbox key, and skips itself without it (forks, Dependabot).
+      - name: End to end against sandbox
+        if: matrix.node-version == 22
+        env:
+          STABLES_E2E_API_KEY: ${{ secrets.STABLES_SANDBOX_API_KEY }}
+        run: npm run test:e2e

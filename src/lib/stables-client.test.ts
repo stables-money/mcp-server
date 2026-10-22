@@ -166,6 +166,18 @@ describe("StablesApiClient", () => {
       const [, opts] = fetchSpy.mock.calls[0];
       expect((opts?.headers as Record<string, string>)["idempotency-key"]).toBeDefined();
     });
+
+    // The API answers a bodyless DELETE with 415; found by the end-to-end test.
+    it("sends an empty JSON body on DELETE", async () => {
+      fetchSpy.mockResolvedValueOnce(mockResponse({ deleted: true }));
+      await client.deleteDocument("transfer", "tr_1", "doc_1");
+
+      const [url, opts] = fetchSpy.mock.calls[0];
+      expect(url).toBe("https://api.test.stables.money/api/v1/transfers/tr_1/documents/doc_1");
+      expect(opts?.method).toBe("DELETE");
+      expect(opts?.body).toBe("{}");
+      expect((opts?.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
+    });
   });
 
   describe("error handling", () => {
