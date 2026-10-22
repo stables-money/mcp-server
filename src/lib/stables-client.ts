@@ -797,6 +797,12 @@ export class StablesApiClient {
       ...(options.headers as Record<string, string>),
     };
 
+    // The API refuses a DELETE with no body (415: the gateway gives it a form content
+    // type). An empty JSON object passes and is ignored.
+    if (options.method === "DELETE" && !options.body) {
+      options = { ...options, body: "{}" };
+    }
+
     if (options.body) {
       headers["Content-Type"] = "application/json";
     }

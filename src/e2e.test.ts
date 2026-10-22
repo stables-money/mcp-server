@@ -140,15 +140,47 @@ describe.skipIf(!KEY)("MCP end to end against sandbox", () => {
     expect(ids.transferId, "sandbox has no transfer to read").toBeTruthy();
     await call("get_transfer", { transferId: ids.transferId });
     if (ids.quoteId) await call("get_quote", { quoteId: ids.quoteId });
-    await call("create_quote", {
-      sourceCurrency: "USDT",
-      sourceAmount: "100",
-      sourceNetwork: "polygon",
-      destinationCurrency: "EUR",
-      destinationCountry: "DE",
-      destinationNetwork: "bank",
-      preview: true,
-    });
+    // Sandbox only prices the corridors it has liquidity for, so try a few and need one.
+    const corridors = [
+      {
+        sourceCurrency: "USDT",
+        sourceNetwork: "polygon",
+        destinationCurrency: "USD",
+        destinationCountry: "US",
+      },
+      {
+        sourceCurrency: "USDC",
+        sourceNetwork: "ethereum",
+        destinationCurrency: "USD",
+        destinationCountry: "US",
+      },
+      {
+        sourceCurrency: "USDT",
+        sourceNetwork: "tron",
+        destinationCurrency: "PHP",
+        destinationCountry: "PH",
+      },
+      {
+        sourceCurrency: "USDT",
+        sourceNetwork: "polygon",
+        destinationCurrency: "AUD",
+        destinationCountry: "AU",
+      },
+    ];
+    let priced = "";
+    for (const corridor of corridors) {
+      const result = (await mcp.callTool({
+        name: "create_quote",
+        arguments: { ...corridor, sourceAmount: "100", destinationNetwork: "bank", preview: true },
+      })) as { content: { text?: string }[]; isError?: boolean };
+      if (!result.isError) {
+        priced = result.content.map((c) => c.text ?? "").join("\n");
+        break;
+      }
+    }
+    called.add("create_quote");
+    expect(priced, "create_quote priced none of the sandbox corridors").toBeTruthy();
+    expect(priced).not.toMatch(/undefined|NaN|\[object Object\]/);
     // A rejection is the expected answer here: it proves the dry run reaches the corridor rules.
     called.add("validate_payment_method");
     const validation = (await mcp.callTool({

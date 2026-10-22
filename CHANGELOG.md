@@ -19,6 +19,9 @@ tests the tools against sandbox.
   `STABLES_SANDBOX_API_KEY` secret and skips without it.
 
 ### Fixed
+- `delete_webhook` and `revoke_api_key` failed against the live API (HTTP 415):
+  the API refuses a DELETE with no body. The client now sends an empty JSON
+  body on DELETE. Found by the new end-to-end test.
 - The contract test read docs.stables.money's GitBook layout and crashed after
   the move to the new docs site (`llms.txt has no "API Reference" section`),
   failing CI. It now reads the new `llms.txt` and each reference page's
