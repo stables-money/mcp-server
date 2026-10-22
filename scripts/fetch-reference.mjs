@@ -22,7 +22,10 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 
 const SPEC_URL = process.env.STABLES_SPEC_URL || "https://api.sandbox.stables.money/docs/json";
-const DOCS_URL = process.env.STABLES_DOCS_URL || "https://docs.stables.money";
+// The same build as docs.stables.money, served from the Cloudflare Pages domain. The
+// stables.money zone's bot protection answers GitHub's runners with 403, which made
+// this check skip itself in CI; pages.dev is outside that zone.
+const DOCS_URL = process.env.STABLES_DOCS_URL || "https://stables-docs.pages.dev";
 
 async function get(url, as) {
   const response = await fetch(url, { headers: { "user-agent": "stables-mcp-server contract check" } });
