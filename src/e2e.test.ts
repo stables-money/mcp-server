@@ -238,16 +238,23 @@ describe.skipIf(!KEY)("MCP end to end against sandbox", () => {
     expect(ids.transferId).toBeTruthy();
     const on = "transfer";
     const transactionId = ids.transferId;
+    const fileName = "mcp-e2e-test.pdf";
+    // Remove any test document an interrupted earlier run left behind.
+    const { documents } = await api.listDocuments(on, transactionId);
+    for (const d of documents.filter((d) => d.file_name === fileName)) {
+      await api.deleteDocument(on, transactionId, d.document_id);
+    }
     const added = await call("add_document", {
       on,
       transactionId,
-      fileName: "mcp-e2e-test.pdf",
+      fileName,
       base64Url: PDF,
       type: "other",
     });
+    // The reply names the transfer first, then lists the document as "- <id>: <file name>".
     const documentId = added.match(
-      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/
-    )?.[0];
+      /^- ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):/m
+    )?.[1];
     expect(documentId, `no document id in:\n${added}`).toBeTruthy();
     try {
       expect(await call("list_documents", { on, transactionId })).toContain(documentId);
