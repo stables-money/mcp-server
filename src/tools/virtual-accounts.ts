@@ -508,4 +508,42 @@ Future deposits pay out to this address.`,
       }
     }
   );
+
+  server.tool(
+    "register_route_payid",
+    "Register a PayID for an activated AUD payment route, so payers can send to an email-style alias instead of a BSB and account number. Calling it again on a route that already has one returns the existing PayID.",
+    {
+      customerId: z.string().describe("The customer ID"),
+      virtualAccountId: z.string().describe("The AUD payment route (virtual account) ID"),
+    },
+    async ({ customerId, virtualAccountId }) => {
+      try {
+        const payId = await client.registerPayId(customerId, virtualAccountId);
+        const state = payId.already_registered ? "already registered" : "registered";
+        const status = payId.pay_id_status ?? payId.status;
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text:
+                `PayID ${state} on route ${virtualAccountId}: ${payId.pay_id}` +
+                (payId.pay_id_name ? ` (${payId.pay_id_name})` : "") +
+                (status ? `, status ${status}` : "") +
+                (payId.status_description ? `. ${payId.status_description}` : ""),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Failed to register PayID: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
 }

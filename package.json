@@ -30,6 +30,7 @@
     "format:check": "prettier --check 'src/**/*.ts'",
     "prepublishOnly": "npm run build",
     "check:spec": "node scripts/fetch-reference.mjs && vitest run src/contract.test.ts",
+    "test:e2e": "vitest run src/e2e.test.ts",
     "check:release": "node scripts/check-release-state.mjs",
     "docs:reference": "node scripts/generate-tool-reference.mjs > docs/tool-reference.md",
     "version:sync": "node scripts/write-version.mjs",

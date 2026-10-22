@@ -16,6 +16,8 @@ import { registerWebhookTools } from "./tools/webhooks.js";
 import { registerSandboxTools } from "./tools/sandbox.js";
 import { registerBalanceTools } from "./tools/balances.js";
 import { registerEntitlementTools } from "./tools/entitlements.js";
+import { registerComplianceTools } from "./tools/compliance.js";
+import { registerDocumentTools } from "./tools/documents.js";
 
 import { SERVER_VERSION } from "./version.js";
 
@@ -38,6 +40,8 @@ export function createStablesMcpServer(client: StablesApiClient): McpServer {
   registerWebhookTools(server, client);
   registerBalanceTools(server, client);
   registerEntitlementTools(server, client);
+  registerComplianceTools(server, client);
+  registerDocumentTools(server, client);
   registerSandboxTools(server, client);
 
   return server;
