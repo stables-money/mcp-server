@@ -12,6 +12,7 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { SERVER_NAME, SERVER_VERSION, createStablesMcpServer } from "../server.js";
 import { BEARER_CHALLENGE, authenticate } from "./auth.js";
+import type { StablesApiClient } from "../lib/stables-client.js";
 
 export const MCP_PATH = "/mcp";
 
@@ -24,13 +25,17 @@ const CORS_HEADERS: Record<string, string> = {
   "access-control-max-age": "86400",
 };
 
-function withCors(response: Response): Response {
+export function withCors(response: Response): Response {
   const headers = new Headers(response.headers);
   for (const [name, value] of Object.entries(CORS_HEADERS)) headers.set(name, value);
   return new Response(response.body, { status: response.status, headers });
 }
 
-function json(body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
+export function json(
+  body: unknown,
+  status = 200,
+  extraHeaders: Record<string, string> = {}
+): Response {
   return new Response(JSON.stringify(body, null, 2), {
     status,
     headers: { "content-type": "application/json", ...extraHeaders },
@@ -71,11 +76,27 @@ function describe(origin: string): Response {
   });
 }
 
-async function handleMcp(request: Request): Promise<Response> {
-  const auth = authenticate(request.headers);
-  if (!auth.ok) return unauthorized(auth.reason);
+/**
+ * Serve one MCP request for an already-authenticated caller. Shared by the
+ * bearer-key path below and the OAuth path in the Worker, which resolves the
+ * caller's API key from the grant before calling this.
+ */
+export async function serveMcp(request: Request, client: StablesApiClient): Promise<Response> {
+  // Stateless means no server-initiated SSE stream. Answering GET with 405
+  // is how the spec says to decline it; letting the transport open a stream
+  // that closes at once makes clients reconnect in a tight loop.
+  if (request.method === "GET") {
+    return json(
+      {
+        error: "method_not_allowed",
+        message: "This server has no SSE stream. Send JSON-RPC with POST.",
+      },
+      405,
+      { allow: "POST, OPTIONS" }
+    );
+  }
 
-  const server = createStablesMcpServer(auth.client);
+  const server = createStablesMcpServer(client);
   const transport = new WebStandardStreamableHTTPServerTransport({
     // Stateless: no session ids, so any instance (or any edge location) can
     // answer any request, and a client never has to re-initialise after a
@@ -122,7 +143,9 @@ export async function handleRequest(request: Request): Promise<Response> {
         )
       );
     }
-    return withCors(await handleMcp(request));
+    const auth = authenticate(request.headers);
+    if (!auth.ok) return withCors(unauthorized(auth.reason));
+    return withCors(await serveMcp(request, auth.client));
   }
   return withCors(
     json(

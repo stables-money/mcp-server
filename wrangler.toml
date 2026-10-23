@@ -3,17 +3,35 @@
 #   npm run dev:worker      # local, http://localhost:8787/mcp
 #   npm run deploy:worker   # publishes the Worker
 #
-# The Worker stores no secrets: each request carries the caller's API key.
+# Secrets (`wrangler secret put`): AUTH0_CLIENT_SECRET for the OAuth sign-in,
+# MCP_GATEWAY_SIGNING_SECRET shared with api-lambda-authoriser so production
+# accepts requests from the Worker's shared egress IPs. Customer API keys are
+# never stored by the Worker itself: an OAuth grant keeps the key it minted,
+# encrypted, in OAUTH_KV.
 name = "stables-mcp"
 main = "src/worker.ts"
 compatibility_date = "2026-09-01"
-compatibility_flags = ["nodejs_compat"]
+# global_fetch_strictly_public: required by the OAuth provider for Client ID
+# Metadata Document fetches (SSRF protection).
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 # Only reachable via mcp.stables.money so the zone WAF and rate-limit rules
 # apply to every request; the workers.dev hostname would bypass them.
 workers_dev = false
 
 [observability]
 enabled = true
+
+[vars]
+# Canonical public origin: the OAuth issuer and the token audience base.
+MCP_PUBLIC_URL = "https://mcp.stables.money"
+# Auth0 custom domain and the "Stables MCP" regular-web application.
+AUTH0_DOMAIN = "login.stables.money"
+AUTH0_CLIENT_ID = ""
+
+# OAuth clients, grants and tokens (hashed; grant props encrypted).
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id = "0d242b3719c7440194034c25c85e207f"
 
 # Production hostname. Cloudflare creates the DNS record and certificate for a
 # custom domain when the Worker is deployed with this block present.

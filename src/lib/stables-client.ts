@@ -780,13 +780,53 @@ const REQUEST_TIMEOUT_MS = 30_000;
 const MAX_RETRIES = 3;
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 
+/**
+ * Header the hosted server adds to every request it forwards. The API gateway
+ * (api-lambda-authoriser) checks it against a shared secret in place of the
+ * source-IP allowlist, since a Cloudflare Worker has no fixed egress IP. The
+ * caller's API key still authenticates the request in api-service.
+ */
+export const GATEWAY_SIGNATURE_HEADER = "X-Stables-Mcp-Signature";
+
+/** `t=<unix seconds>,v1=<hex HMAC-SHA256(secret, "<t>.<METHOD>.<path>")>` */
+export async function signGatewayRequest(
+  secret: string,
+  method: string,
+  path: string,
+  timestampSeconds = Math.floor(Date.now() / 1000)
+): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const payload = `${timestampSeconds}.${method.toUpperCase()}.${path}`;
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
+  const hex = Array.from(new Uint8Array(signature), (b) => b.toString(16).padStart(2, "0")).join(
+    ""
+  );
+  return `t=${timestampSeconds},v1=${hex}`;
+}
+
+export interface StablesApiClientOptions {
+  /** Shared secret for GATEWAY_SIGNATURE_HEADER; unset means no signature (local use). */
+  gatewaySigningSecret?: string;
+  /** Sent as User-Agent so API logs can tell MCP traffic apart. */
+  userAgent?: string;
+}
+
 export class StablesApiClient {
   private apiKey: string;
   private baseUrl: string;
+  private options: StablesApiClientOptions;
 
-  constructor(apiKey: string, baseUrl: string) {
+  constructor(apiKey: string, baseUrl: string, options: StablesApiClientOptions = {}) {
     this.apiKey = apiKey;
     this.baseUrl = baseUrl;
+    this.options = options;
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -794,8 +834,17 @@ export class StablesApiClient {
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.apiKey}`,
+      ...(this.options.userAgent ? { "User-Agent": this.options.userAgent } : {}),
       ...(options.headers as Record<string, string>),
     };
+
+    if (this.options.gatewaySigningSecret) {
+      headers[GATEWAY_SIGNATURE_HEADER] = await signGatewayRequest(
+        this.options.gatewaySigningSecret,
+        options.method ?? "GET",
+        new URL(url).pathname
+      );
+    }
 
     // The API refuses a DELETE with no body (415: the gateway gives it a form content
     // type). An empty JSON object passes and is ignored.
