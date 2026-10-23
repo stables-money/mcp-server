@@ -10,23 +10,36 @@ import { StablesApiClient } from "../lib/stables-client.js";
 /**
  * The tenant-facing subset the API accepts. Declared as an enum rather than
  * free strings so a wrong value is caught before the request instead of coming
- * back as a 400 the model has to guess its way out of.
+ * back as a 400 the model has to guess its way out of. Must equal the
+ * `eventTypes` enum in the deployed spec; webhook-event-types.contract.test.ts
+ * checks that against reference/spec.json (npm run check:spec).
  */
-const WEBHOOK_EVENT_TYPES = [
+export const WEBHOOK_EVENT_TYPES = [
   "customer.created",
   "customer.updated",
   "kyc_link.updated.status_transitioned",
   "transfer.created",
   "transfer.updated.status_transitioned",
+  "transfer.action_required",
   "quote.created",
   "quote.updated.status_transitioned",
   "virtual_account.created",
   "virtual_account.activity.created",
   "virtual_account.activity.updated.status_transitioned",
+  "virtual_account.fee_charge_failed",
+  "virtual_account.deactivated",
+  "virtual_account.reactivated",
   "travel_rule.wallet_verification_required",
   "rfi.created",
   "rfi.updated",
   "rfi.resolved",
+  "entitlement.requested",
+  "entitlement.updated.status_transitioned",
+  "entitlement.updated.requirements_changed",
+  "prefund.wallet.created",
+  "prefund.deposit.received",
+  "prefund.withdrawal.completed",
+  "prefund.withdrawal.failed",
   "all",
 ] as const;
 
