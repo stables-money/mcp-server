@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.5.0] - 2026-10-23
+
+Hosted server: OAuth sign-in and production through the gateway.
+
+### Added
+- **OAuth for the hosted server.** `mcp.stables.money` is now an OAuth
+  authorization server as well as the MCP endpoint, so Claude.ai, ChatGPT and
+  any client that can't hold a key connect by signing in. Discovery
+  (`/.well-known/oauth-protected-resource/mcp`,
+  `/.well-known/oauth-authorization-server`), dynamic registration and Client
+  ID Metadata Documents, PKCE, refresh tokens. The consent page asks sandbox or
+  production, the user signs in with their Stables dashboard account through
+  Auth0, and the server creates an API key in that organisation (named after
+  the client) which serves every later call. Revoking the key in the dashboard
+  disconnects the client. Built on `@cloudflare/workers-oauth-provider`; grant
+  props are encrypted at rest.
+- **Gateway signature.** With the `MCP_GATEWAY_SIGNING_SECRET` secret set, the
+  hosted server signs each forwarded request (`X-Stables-Mcp-Signature`) so the
+  API gateway's IP authoriser accepts production traffic from the Worker's
+  shared egress IPs (api-lambda-authoriser#4).
+- The hosted server identifies itself with a `User-Agent` on API calls.
+
+### Changed
+- API keys sent as `X-Api-Key` keep working; they are mapped onto the
+  `Authorization` header before the OAuth host sees the request.
+- An unauthenticated `/mcp` request now gets the RFC 9728 challenge
+  (`WWW-Authenticate: Bearer … resource_metadata=…`) so OAuth clients can find
+  the sign-in; API-key callers see the same 401 as before.
+
 ## [2.4.0] - 2026-10-22
 
 Covers every endpoint now documented on docs.stables.money (51 tools), and

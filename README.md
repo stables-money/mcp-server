@@ -90,7 +90,7 @@ The server runs as a hosted service, so there is nothing to install. Point your 
 https://mcp.stables.money/mcp
 ```
 
-and send your Stables API key as a bearer token. The key you get during onboarding is all you need: a `sti_test_…` key reaches sandbox, a `sti_live_…` key reaches production and moves real money. The hosted server keeps no credentials of its own; every request carries yours.
+and either send your Stables API key as a bearer token or sign in with OAuth. The key you get during onboarding is all you need: a `sti_test_…` key reaches sandbox, a `sti_live_…` key reaches production and moves real money. Clients that can't hold a key (Claude.ai, ChatGPT) sign in instead; see below.
 
 ### Claude Code
 
@@ -121,9 +121,17 @@ url = "https://mcp.stables.money/mcp"
 bearer_token_env_var = "STABLES_API_KEY"
 ```
 
-### Claude.ai and ChatGPT
+### Claude.ai, ChatGPT and other clients that sign in with OAuth
 
-Claude.ai custom connectors and ChatGPT connectors sign in with OAuth rather than a fixed key. OAuth sign-in for the hosted server is in progress; until it ships, use one of the clients above, or run the server locally as described below.
+Add `https://mcp.stables.money/mcp` as a custom connector with no key. The client discovers the server's OAuth endpoints, registers itself, and sends you to a Stables page that asks two things: whether to connect sandbox or production, and permission for that client. You then sign in with your Stables dashboard account (and pick an organisation if you belong to several).
+
+On success the server creates an API key in that organisation, named after the client (for example `Claude via MCP (you@company.com)`), and uses it for every call the client makes. Revoke it any time under Developer → API keys in the dashboard, which disconnects the client. Nothing else is stored: the sign-in token is used once to create the key and then dropped.
+
+- **Claude.ai / Claude Desktop:** Settings → Connectors → Add custom connector, URL `https://mcp.stables.money/mcp`, leave the OAuth client fields on their defaults.
+- **ChatGPT:** Settings → Connectors → Create (developer mode), MCP server URL `https://mcp.stables.money/mcp`, authentication OAuth.
+- **Claude Code without a key:** `claude mcp add --transport http stables https://mcp.stables.money/mcp`, then `/mcp` to sign in.
+
+The OAuth endpoints are standard: `/.well-known/oauth-protected-resource/mcp`, `/.well-known/oauth-authorization-server`, `/authorize`, `/oauth/token`, `/oauth/register`. Client ID Metadata Documents and dynamic registration are both accepted; PKCE (S256) is required.
 
 ## Running locally
 
@@ -267,6 +275,22 @@ STABLES_API_KEY=your-api-key node build/index.js
 **AI (using MCP tools):**
 1. Collects the extra beneficiary details EUR requires — `recipientType`, a full address, and `dateOfBirth` for individuals — before doing anything else
 2. Calls `create_quote`, then `create_transfer` once a human approves
+
+## Operating the hosted server
+
+The hosted server is the Cloudflare Worker in `src/worker.ts` (`wrangler.toml`). It needs:
+
+- `OAUTH_KV`: a KV namespace for OAuth clients, grants and tokens. Tokens and secrets are stored as hashes; a grant's API key is encrypted with a key only that grant's token can unwrap.
+- Vars `MCP_PUBLIC_URL`, `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`: the public origin, the Auth0 custom domain, and the "Stables MCP" regular-web application (callback `https://mcp.stables.money/callback`).
+- Secret `AUTH0_CLIENT_SECRET`: that application's secret.
+- Secret `MCP_GATEWAY_SIGNING_SECRET`: shared with the API gateway's IP authoriser. The Worker has no fixed egress IP, so it signs each forwarded request (`X-Stables-Mcp-Signature`), and production accepts the signature in place of the source-IP check. Without it, production calls through the hosted server are rejected by the gateway; sandbox is unaffected.
+
+```bash
+wrangler secret put AUTH0_CLIENT_SECRET
+wrangler secret put MCP_GATEWAY_SIGNING_SECRET
+```
+
+Without `OAUTH_KV` the Worker runs bearer-key only, which is how the unit tests exercise it.
 
 ## Development
 
