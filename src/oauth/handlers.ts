@@ -273,6 +273,8 @@ function renderOAuthError(error: unknown): Response {
     );
   }
   if (error instanceof OAuthStepError) {
+    // Workers Logs is the only place to see why a sign-in failed server-side.
+    // eslint-disable-next-line no-console
     console.error(
       JSON.stringify({
         event: "oauth_step_failed",
