@@ -359,6 +359,9 @@ describe("OAuth flow end to end", () => {
     expect(code).toBeTruthy();
 
     const tokenCall = upstream.mock.calls.find(([u]) => String(u).endsWith("/oauth/token"))!;
+    expect((tokenCall[1]?.headers as Record<string, string>)["user-agent"]).toMatch(
+      /^stables-mcp-server\//
+    );
     const tokenBody = new URLSearchParams(String(tokenCall[1]?.body));
     expect(tokenBody.get("grant_type")).toBe("authorization_code");
     expect(tokenBody.get("code")).toBe("auth0-code");

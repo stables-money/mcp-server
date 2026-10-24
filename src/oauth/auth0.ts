@@ -9,7 +9,15 @@
  * accept, so no api-service change is needed.
  */
 
+import { SERVER_VERSION } from "../version.js";
 import type { StablesEnvironment } from "./types.js";
+
+/**
+ * Sent on every server-side call. Cloudflare in front of the Auth0 custom
+ * domain answers 403 to requests with no User-Agent, and Worker subrequests
+ * carry none by default.
+ */
+export const SERVER_USER_AGENT = `stables-mcp-server/${SERVER_VERSION} (hosted)`;
 
 export const API_BASE: Record<StablesEnvironment, string> = {
   sandbox: "https://api.sandbox.stables.money",
@@ -101,6 +109,17 @@ export function auth0AuthorizeUrl(
   return url.toString();
 }
 
+/** Auth0's own error_description when the body is its JSON; nothing for an HTML block page. */
+function describeAuth0Error(body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { error_description?: unknown; error?: unknown };
+    const text = parsed.error_description ?? parsed.error;
+    return typeof text === "string" && text ? `: ${text.slice(0, 160)}` : "";
+  } catch {
+    return "";
+  }
+}
+
 export interface Auth0Tokens {
   access_token: string;
   id_token: string;
@@ -113,7 +132,10 @@ export async function exchangeAuth0Code(
 ): Promise<Auth0Tokens> {
   const response = await fetchImpl(`https://${config.domain}/oauth/token`, {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "user-agent": SERVER_USER_AGENT,
+    },
     body: new URLSearchParams({
       grant_type: "authorization_code",
       client_id: config.clientId,
@@ -127,7 +149,7 @@ export async function exchangeAuth0Code(
     const detail = await response.text().catch(() => "");
     throw new OAuthStepError(
       "auth0_token",
-      `Sign-in could not be completed (Auth0 answered HTTP ${response.status}).`,
+      `Sign-in could not be completed (Auth0 answered HTTP ${response.status}${describeAuth0Error(detail)}).`,
       response.status,
       detail
     );
@@ -209,6 +231,7 @@ export async function mintApiKey(
       authorization: `Bearer ${params.accessToken}`,
       "content-type": "application/json",
       "idempotency-key": crypto.randomUUID(),
+      "user-agent": SERVER_USER_AGENT,
     },
     body: JSON.stringify({ name: params.name, metadata: params.metadata }),
   });
