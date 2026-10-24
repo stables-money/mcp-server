@@ -343,6 +343,7 @@ describe("OAuth flow end to end", () => {
     );
     expect(auth0Url.searchParams.get("redirect_uri")).toBe(`${ORIGIN}/callback`);
     expect(auth0Url.searchParams.get("code_challenge_method")).toBe("S256");
+    expect(auth0Url.searchParams.get("prompt")).toBe("login");
     const state = auth0Url.searchParams.get("state")!;
     const upstreamCookie = cookiesFrom(approved);
     expect(upstream).not.toHaveBeenCalled();

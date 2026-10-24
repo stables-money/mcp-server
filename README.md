@@ -125,7 +125,7 @@ bearer_token_env_var = "STABLES_API_KEY"
 
 Add `https://mcp.stables.money/mcp` as a custom connector with no key. The client discovers the server's OAuth endpoints, registers itself, and sends you to a Stables page that asks two things: whether to connect sandbox or production, and permission for that client. You then sign in with your Stables dashboard account (and pick an organisation if you belong to several).
 
-On success the server creates an API key in that organisation, named after the client (for example `Claude via MCP (you@company.com)`), and uses it for every call the client makes. Revoke it any time under Developer → API keys in the dashboard, which disconnects the client. Nothing else is stored: the sign-in token is used once to create the key and then dropped.
+Auth0 asks for your credentials every time (an existing browser session is never reused for an agent connection) and, when you belong to several organisations, which one to use. On success the server creates an API key in that organisation, named after the client and the account that signed in (for example `Claude via MCP (you@company.com)`), and uses it for every call the client makes. Revoke it any time under Developer → API keys in the dashboard, which disconnects the client. Nothing else is stored: the sign-in token is used once to create the key and then dropped.
 
 - **Claude.ai / Claude Desktop:** Settings → Connectors → Add custom connector, URL `https://mcp.stables.money/mcp`, leave the OAuth client fields on their defaults.
 - **ChatGPT:** Settings → Connectors → Create (developer mode), MCP server URL `https://mcp.stables.money/mcp`, authentication OAuth.

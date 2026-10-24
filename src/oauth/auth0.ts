@@ -106,6 +106,11 @@ export function auth0AuthorizeUrl(
   url.searchParams.set("state", params.state);
   url.searchParams.set("code_challenge", params.codeChallenge);
   url.searchParams.set("code_challenge_method", "S256");
+  // Always ask for credentials. An agent connection mints a long-lived API key
+  // in whichever account signs in, and a browser can hold an Auth0 session for
+  // someone else (staff who logged in as a customer, a shared machine): that
+  // session must never be reused silently here.
+  url.searchParams.set("prompt", "login");
   return url.toString();
 }
 

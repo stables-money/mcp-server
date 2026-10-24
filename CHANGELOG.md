@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.5.1] - 2026-10-24
+
+Hosted sign-in: one look from consent to login, and safer sign-in.
+
+### Changed
+- The consent and error pages now share the Stables login's design (coin
+  video, dark card, same type), so the hop from consent to the Auth0 login
+  screen reads as one flow. The hero says what the sign-in is for: "Connect
+  your AI agent".
+- Auth0 is asked for credentials on every agent sign-in (`prompt=login`). A
+  browser that still held an Auth0 session for someone else (staff signed in
+  as a customer, a shared machine) had that session reused silently, and the
+  key was minted in that account's organisation.
+
+### Fixed
+- Re-submitting the consent form (Arc does this when its popup is moved into a
+  window) found the one-time handle already used and showed "not started in
+  this browser" although the first submit had gone through. Buttons disable on
+  first submit, and a reused handle says the sign-in is continuing elsewhere.
+
 ## [2.5.0] - 2026-10-23
 
 Hosted server: OAuth sign-in and production through the gateway.
