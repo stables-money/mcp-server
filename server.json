@@ -1,0 +1,36 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "money.stables/mcp",
+  "title": "Stables",
+  "description": "Stablecoin payments for AI agents: customers, quotes, transfers, payment routes.",
+  "websiteUrl": "https://docs.stables.money/get-started/getting-started/quickstart/building-with-ai",
+  "repository": {
+    "url": "https://github.com/stables-money/mcp-server",
+    "source": "github"
+  },
+  "version": "2.6.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "stables-mcp-server",
+      "version": "2.6.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "STABLES_API_KEY",
+          "description": "Your Stables API key: sti_test_ for sandbox, sti_live_ for production",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.stables.money/mcp"
+    }
+  ]
+}

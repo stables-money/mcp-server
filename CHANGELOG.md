@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.6.1] - 2026-10-25
+
+### Added
+- Listing for the official MCP Registry as `money.stables/mcp`: `server.json`
+  describes both the hosted endpoint (`https://mcp.stables.money/mcp`) and the
+  npm package, and `package.json` carries the matching `mcpName` the registry
+  checks. `npm version` keeps `server.json` on the package version.
+
 ## [2.6.0] - 2026-10-25
 
 Safer agent connections: labelled tools, read-only by default.
