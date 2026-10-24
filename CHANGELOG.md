@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.5.2] - 2026-10-24
+
+### Fixed
+- Clicking "Allow and sign in" sent Claude "access denied" instead of going
+  to the login page: the double-submit guard added in 2.5.1 disabled the
+  buttons during the submit event, and a disabled button's `decision=approve`
+  value is left out of the form data, so the server read the submit as a
+  cancel. The buttons are now disabled after the submit has been built.
+  Found in the Worker log (consent page, Allow, then no callback and no
+  Auth0 login) and reproduced with a real click.
+
 ## [2.5.1] - 2026-10-24
 
 Hosted sign-in: one look from consent to login, and safer sign-in.
