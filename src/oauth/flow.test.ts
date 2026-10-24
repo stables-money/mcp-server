@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import worker, { type Env, normaliseAuthorization } from "../worker.js";
 import { grantScope } from "./handlers.js";
+import { grantFor } from "./provider.js";
 import { GATEWAY_SIGNATURE_HEADER, signGatewayRequest } from "../lib/stables-client.js";
 
 const ORIGIN = "https://mcp.stables.money";
@@ -164,9 +165,31 @@ describe("normaliseAuthorization", () => {
 });
 
 describe("grantScope", () => {
-  it("keeps the base scope and drops scopes we don't grant", () => {
-    expect(grantScope(["offline_access", "admin"])).toEqual(["stables", "offline_access"]);
-    expect(grantScope([])).toEqual(["stables"]);
+  it("always grants read, write only when chosen, and keeps offline_access", () => {
+    expect(grantScope(["offline_access", "admin"], false)).toEqual([
+      "stables:read",
+      "offline_access",
+    ]);
+    expect(grantScope([], true)).toEqual(["stables:read", "stables:write"]);
+  });
+});
+
+describe("grantFor", () => {
+  it("maps scopes to tool access; API keys keep everything; OAuth never gets admin", () => {
+    expect(grantFor({ apiKey: "k", environment: "sandbox", source: "api_key" }, [])).toEqual({
+      read: true,
+      write: true,
+      admin: true,
+    });
+    const oauth = { apiKey: "k", environment: "sandbox" as const, source: "oauth" as const };
+    expect(grantFor(oauth, ["stables:read"])).toEqual({ read: true, write: false, admin: false });
+    expect(grantFor(oauth, ["stables:read", "stables:write"])).toEqual({
+      read: true,
+      write: true,
+      admin: false,
+    });
+    // Grants made before the split carry the legacy scope: read and write.
+    expect(grantFor(oauth, ["stables"])).toEqual({ read: true, write: true, admin: false });
   });
 });
 
@@ -177,7 +200,8 @@ describe("discovery", () => {
     const body = await res.json();
     expect(body.resource).toBe(RESOURCE);
     expect(body.authorization_servers).toEqual([ORIGIN]);
-    expect(body.scopes_supported).toContain("stables");
+    // Only the baseline: clients ask for read first and step up to write.
+    expect(body.scopes_supported).toEqual(["stables:read"]);
   });
 
   it("publishes authorization server metadata with PKCE and registration", async () => {
@@ -277,6 +301,15 @@ describe("OAuth flow end to end", () => {
       if (url === "https://api.sandbox.stables.money/api/v1/customers") {
         return customersResponse();
       }
+      if (url === "https://api.sandbox.stables.money/api/v1/customer") {
+        return Response.json({
+          customer_id: "cus-1",
+          customer_type: "individual",
+          status: "in_progress",
+          first_name: "A",
+          last_name: "B",
+        });
+      }
       throw new Error(`unexpected upstream fetch ${init?.method ?? "GET"} ${url}`);
     });
     vi.spyOn(globalThis, "fetch").mockImplementation(upstream as unknown as typeof fetch);
@@ -298,12 +331,12 @@ describe("OAuth flow end to end", () => {
     return (await res.json()).client_id as string;
   }
 
-  function authorizeUrl(clientId: string, challenge: string): string {
+  function authorizeUrl(clientId: string, challenge: string, scope = "stables:read"): string {
     const params = new URLSearchParams({
       response_type: "code",
       client_id: clientId,
       redirect_uri: CLAUDE_REDIRECT,
-      scope: "stables",
+      scope,
       state: "client-state",
       code_challenge: challenge,
       code_challenge_method: "S256",
@@ -396,7 +429,9 @@ describe("OAuth flow end to end", () => {
     const tokens = await token.json();
     expect(tokens.access_token).toBeTruthy();
     expect(tokens.refresh_token).toBeTruthy();
-    expect(tokens.scope).toContain("stables");
+    // The consent page defaults to read only.
+    expect(tokens.scope.split(" ")).toContain("stables:read");
+    expect(tokens.scope.split(" ")).not.toContain("stables:write");
 
     // 5. Tool calls are served with the minted key, never the Auth0 token.
     const res = await mcp(env, rpc("tools/call", { name: "list_customers", arguments: {} }), {
@@ -413,6 +448,99 @@ describe("OAuth flow end to end", () => {
     for (const entry of kv.store.values()) {
       if (typeof entry.value === "string") expect(entry.value).not.toContain(MINTED_KEY);
     }
+  });
+
+  /** Runs consent → Auth0 → token exchange and returns the access token. */
+  async function connect(options: { access?: "read" | "write"; scope?: string } = {}) {
+    const clientId = await registerClient();
+    const verifier = "v".repeat(43);
+    const page = await call(env, authorizeUrl(clientId, await s256(verifier), options.scope));
+    const pageHtml = await page.text();
+    const handle = pageHtml.match(/name="handle" value="([^"]+)"/)![1];
+    const fields: Record<string, string> = {
+      handle,
+      decision: "approve",
+      environment: "sandbox",
+    };
+    if (options.access) fields.access = options.access;
+    const approved = await call(env, "/authorize", form(fields, cookiesFrom(page)));
+    const state = new URL(approved.headers.get("location")!).searchParams.get("state")!;
+    const back = await call(env, `/callback?code=c&state=${encodeURIComponent(state)}`, {
+      headers: { cookie: cookiesFrom(approved) },
+    });
+    const code = new URL(back.headers.get("location")!).searchParams.get("code")!;
+    const token = await call(env, "/oauth/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        client_id: clientId,
+        redirect_uri: CLAUDE_REDIRECT,
+        code_verifier: verifier,
+        resource: RESOURCE,
+      }).toString(),
+    });
+    const tokens = await token.json();
+    return { pageHtml, accessToken: tokens.access_token as string, scope: tokens.scope as string };
+  }
+
+  const createCustomer = () =>
+    rpc("tools/call", {
+      name: "create_customer",
+      arguments: { customerType: "individual", firstName: "A", lastName: "B" },
+    });
+
+  it("a read-only connection reads, is asked to step up for writes, and has no key tools", async () => {
+    const { accessToken } = await connect();
+    const auth = { authorization: `Bearer ${accessToken}` };
+
+    const read = await mcp(env, rpc("tools/call", { name: "list_customers", arguments: {} }), auth);
+    expect(read.status).toBe(200);
+
+    const write = await mcp(env, createCustomer(), auth);
+    expect(write.status).toBe(403);
+    const challenge = write.headers.get("www-authenticate") ?? "";
+    expect(challenge).toContain('error="insufficient_scope"');
+    expect(challenge).toContain('scope="stables:read stables:write"');
+    expect(challenge).toContain("resource_metadata=");
+    // Never reached the API.
+    const posts = upstream.mock.calls.filter(
+      ([u, i]) => String(u).endsWith("/api/v1/customer") && i?.method === "POST"
+    );
+    expect(posts).toHaveLength(0);
+
+    // A batch hiding a write behind a read is refused as a whole.
+    const batch = `[${rpc("tools/call", { name: "list_customers", arguments: {} }, 7)},${createCustomer()}]`;
+    expect((await mcp(env, batch, auth)).status).toBe(403);
+
+    const list = await mcp(env, rpc("tools/list", {}, 2), auth);
+    const names = (await list.json()).result.tools.map((t: { name: string }) => t.name);
+    expect(names).toContain("create_transfer");
+    expect(names).not.toContain("create_api_key");
+    expect(names).not.toContain("revoke_api_key");
+  });
+
+  it("'Read and make changes' grants write, and the page preselects it when asked", async () => {
+    const { pageHtml, accessToken, scope } = await connect({
+      access: "write",
+      scope: "stables:read stables:write",
+    });
+    expect(pageHtml).toContain("is asking for permission to make changes");
+    expect(pageHtml).toMatch(/value="write" checked/);
+    expect(scope.split(" ")).toContain("stables:write");
+
+    const write = await mcp(env, createCustomer(), { authorization: `Bearer ${accessToken}` });
+    expect(write.status).toBe(200);
+    const posts = upstream.mock.calls.filter(
+      ([u, i]) => String(u).endsWith("/api/v1/customer") && i?.method === "POST"
+    );
+    expect(posts).toHaveLength(1);
+  });
+
+  it("defaults to read only even when the client asks for write", async () => {
+    const { scope } = await connect({ scope: "stables:read stables:write" });
+    expect(scope.split(" ")).not.toContain("stables:write");
   });
 
   it("sends the client access_denied when the user cancels", async () => {

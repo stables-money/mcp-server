@@ -12,13 +12,58 @@
  *   /callback are ours (handlers.ts).
  */
 
-import { ExternalTokenError, OAuthProvider } from "@cloudflare/workers-oauth-provider";
+import {
+  ExternalTokenError,
+  OAuthProvider,
+  insufficientScope,
+  type OAuthResourceAuth,
+} from "@cloudflare/workers-oauth-provider";
+import { FULL_ACCESS, TOOL_POLICY, type ToolGrant } from "../tool-policy.js";
 import { SERVER_VERSION } from "../version.js";
 import { serveMcp, withCors, json } from "../http/handler.js";
 import { StablesApiClient, apiUrlForKey } from "../lib/stables-client.js";
 import { environmentForKey } from "./auth0.js";
 import { handleDefault } from "./handlers.js";
-import { SCOPE, SUPPORTED_SCOPES, type GrantProps, type OAuthEnv } from "./types.js";
+import {
+  LEGACY_SCOPE,
+  READ_SCOPE,
+  SCOPE,
+  SUPPORTED_SCOPES,
+  WRITE_SCOPE,
+  type GrantProps,
+  type OAuthEnv,
+} from "./types.js";
+
+/**
+ * What a connection may do. An API key presented directly keeps full access,
+ * as before. An OAuth grant reads with `stables:read`, writes with
+ * `stables:write` (or the legacy `stables`), and never gets admin tools.
+ */
+export function grantFor(props: GrantProps | undefined, scope: string[]): ToolGrant {
+  if (props?.source === "api_key") return FULL_ACCESS;
+  const write = scope.includes(WRITE_SCOPE) || scope.includes(LEGACY_SCOPE);
+  const read = write || scope.includes(READ_SCOPE);
+  return { read, write, admin: false };
+}
+
+/** Tool names a JSON-RPC body calls (one message or a batch). */
+export async function calledTools(request: Request): Promise<string[]> {
+  if (request.method !== "POST") return [];
+  let body: unknown;
+  try {
+    body = await request.clone().json();
+  } catch {
+    return [];
+  }
+  const messages = Array.isArray(body) ? body : [body];
+  return messages
+    .filter(
+      (m): m is { method: string; params?: { name?: unknown } } =>
+        !!m && typeof m === "object" && (m as { method?: unknown }).method === "tools/call"
+    )
+    .map((m) => (typeof m.params?.name === "string" ? m.params.name : ""))
+    .filter(Boolean);
+}
 
 export function resourceFor(origin: string): string {
   return `${origin}/mcp`;
@@ -36,7 +81,8 @@ export function apiClientFor(apiKey: string, env: OAuthEnv): StablesApiClient | 
 async function serveAuthorizedMcp(
   request: Request,
   env: OAuthEnv,
-  props: GrantProps | undefined
+  props: GrantProps | undefined,
+  auth: OAuthResourceAuth | undefined
 ): Promise<Response> {
   const client = props?.apiKey ? apiClientFor(props.apiKey, env) : null;
   if (!client) {
@@ -51,7 +97,30 @@ async function serveAuthorizedMcp(
       )
     );
   }
-  return withCors(await serveMcp(request, client));
+  const grant = grantFor(props, auth?.scope ?? []);
+  if (!grant.read) {
+    return withCors(
+      json({ error: "insufficient_scope", message: "This connection has no access." }, 403)
+    );
+  }
+  // A read-only connection still lists the write tools, so the client knows
+  // they exist; calling one answers 403 insufficient_scope naming the write
+  // scope, which MCP clients answer by asking the person for more access.
+  if (!grant.write && auth) {
+    const writes = (await calledTools(request)).filter(
+      (name) => TOOL_POLICY[name]?.access === "write"
+    );
+    if (writes.length > 0) {
+      return withCors(
+        insufficientScope(
+          auth,
+          [READ_SCOPE, WRITE_SCOPE],
+          `${writes.join(", ")} changes your Stables account. Reconnect and allow "Read and make changes" to use it.`
+        )
+      );
+    }
+  }
+  return withCors(await serveMcp(request, client, { grant }));
 }
 
 const providers = new Map<string, OAuthProvider<OAuthEnv>>();
@@ -66,8 +135,8 @@ export function providerFor(origin: string): OAuthProvider<OAuthEnv> {
     apiRoute: "/mcp",
     apiHandler: {
       fetch(request: Request, env: OAuthEnv, ctx: unknown) {
-        const props = (ctx as { props?: GrantProps }).props;
-        return serveAuthorizedMcp(request, env, props);
+        const { props, auth } = ctx as { props?: GrantProps; auth?: OAuthResourceAuth };
+        return serveAuthorizedMcp(request, env, props, auth);
       },
     },
     defaultHandler: {
@@ -100,7 +169,11 @@ export function providerFor(origin: string): OAuthProvider<OAuthEnv> {
           statusCode: 401,
         });
       }
-      const props: GrantProps = { apiKey: token, environment: environmentForKey(token) };
+      const props: GrantProps = {
+        source: "api_key",
+        apiKey: token,
+        environment: environmentForKey(token),
+      };
       return { props, audience: resource };
     },
   });

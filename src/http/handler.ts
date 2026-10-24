@@ -10,7 +10,12 @@
  */
 
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { SERVER_NAME, SERVER_VERSION, createStablesMcpServer } from "../server.js";
+import {
+  SERVER_NAME,
+  SERVER_VERSION,
+  createStablesMcpServer,
+  type ServerOptions,
+} from "../server.js";
 import { BEARER_CHALLENGE, authenticate } from "./auth.js";
 import type { StablesApiClient } from "../lib/stables-client.js";
 
@@ -81,7 +86,11 @@ function describe(origin: string): Response {
  * bearer-key path below and the OAuth path in the Worker, which resolves the
  * caller's API key from the grant before calling this.
  */
-export async function serveMcp(request: Request, client: StablesApiClient): Promise<Response> {
+export async function serveMcp(
+  request: Request,
+  client: StablesApiClient,
+  options: ServerOptions = {}
+): Promise<Response> {
   // Stateless means no server-initiated SSE stream. Answering GET with 405
   // is how the spec says to decline it; letting the transport open a stream
   // that closes at once makes clients reconnect in a tight loop.
@@ -96,7 +105,7 @@ export async function serveMcp(request: Request, client: StablesApiClient): Prom
     );
   }
 
-  const server = createStablesMcpServer(client);
+  const server = createStablesMcpServer(client, options);
   const transport = new WebStandardStreamableHTTPServerTransport({
     // Stateless: no session ids, so any instance (or any edge location) can
     // answer any request, and a client never has to re-initialise after a
