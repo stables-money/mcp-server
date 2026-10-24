@@ -85,7 +85,7 @@ if (release.tag_name) {
   console.log(`latest GitHub Release: ${release.tag_name}`);
   if (stripV(release.tag_name) !== npmVersion) {
     problems.push(
-      `GitHub Release ${release.tag_name} never reached npm (latest is ${npmVersion}). Check the "Publish to npm" run for that release.`
+      `GitHub Release ${release.tag_name} never reached npm (latest is ${npmVersion}). Check the "Publish to npm and the MCP Registry" run for that release.`
     );
   }
 } else {
