@@ -27,8 +27,10 @@ import {
 } from "./auth0.js";
 import { consentPage, errorPage } from "./pages.js";
 import {
+  LEGACY_SCOPE,
+  READ_SCOPE,
   SCOPE,
-  SUPPORTED_SCOPES,
+  WRITE_SCOPE,
   type GrantProps,
   type OAuthEnv,
   type StablesEnvironment,
@@ -57,11 +59,20 @@ function publicOrigin(request: Request, env: OAuthEnv): string {
   return (env.MCP_PUBLIC_URL ?? new URL(request.url).origin).replace(/\/$/, "");
 }
 
-/** The scopes a grant gets: what the client asked for, limited to ours, always the base scope. */
-export function grantScope(requested: string[]): string[] {
-  const scope = requested.filter((s) => SUPPORTED_SCOPES.includes(s));
-  if (!scope.includes(SCOPE)) scope.unshift(SCOPE);
+/**
+ * The scopes a grant gets: always read; write only when the person chose
+ * "make changes"; offline_access when the client asked for refresh tokens.
+ */
+export function grantScope(requested: string[], allowChanges: boolean): string[] {
+  const scope = [READ_SCOPE];
+  if (allowChanges) scope.push(WRITE_SCOPE);
+  if (requested.includes("offline_access")) scope.push("offline_access");
   return scope;
+}
+
+/** Whether the client asked for write access (or the legacy all-access scope). */
+export function requestsChanges(requested: string[]): boolean {
+  return requested.includes(WRITE_SCOPE) || requested.includes(LEGACY_SCOPE);
 }
 
 export async function handleDefault(request: Request, env: OAuthEnv): Promise<Response> {
@@ -127,7 +138,11 @@ async function authorizeGet(
   // describeConsent first: a failed client lookup leaves nothing in KV.
   const details = await oauth.describeConsent(authRequest);
   const consent = await oauth.beginConsent(authRequest);
-  return html(consentPage(details, consent.handle), 200, consent.headers);
+  return html(
+    consentPage(details, consent.handle, { requestsChanges: requestsChanges(authRequest.scope) }),
+    200,
+    consent.headers
+  );
 }
 
 async function authorizePost(
@@ -159,7 +174,7 @@ async function authorizePost(
   }
 
   const approved = await oauth.approveConsent(request, handle);
-  const scope = grantScope(approved.request.scope);
+  const scope = grantScope(approved.request.scope, form.get("access") === "write");
   const verifier = randomVerifier();
   const data: UpstreamData = { environment, verifier, scope };
   const { state, headers } = await oauth.beginUpstream(approved.request, {
@@ -209,10 +224,12 @@ async function callback(request: Request, env: OAuthEnv, oauth: OAuthHelpers): P
       source: "mcp_oauth",
       client: clientName,
       user: identity.email ?? identity.sub,
+      access: data.scope.includes(WRITE_SCOPE) ? "read_write" : "read",
     },
   });
 
   const props: GrantProps = {
+    source: "oauth",
     apiKey: minted.plaintextKey,
     apiKeyId: minted.apiKeyId,
     environment: data.environment,

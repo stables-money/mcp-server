@@ -11,15 +11,26 @@
 
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 
-/** The one scope the server grants; tool-level scopes can come later. */
-export const SCOPE = "stables";
-export const SUPPORTED_SCOPES = [SCOPE, "offline_access"];
+/**
+ * Scopes. `stables:read` is what any connection gets; `stables:write` lets the
+ * agent change things and move money, and is granted only when the person
+ * ticks "make changes" on the consent page. Grants made before these scopes
+ * existed carry `stables`, which keeps meaning read and write.
+ */
+export const READ_SCOPE = "stables:read";
+export const WRITE_SCOPE = "stables:write";
+export const LEGACY_SCOPE = "stables";
+/** The baseline a client should request first (RFC 9728 scopes_supported). */
+export const SCOPE = READ_SCOPE;
+export const SUPPORTED_SCOPES = [READ_SCOPE, WRITE_SCOPE, "offline_access", LEGACY_SCOPE];
 
 export type StablesEnvironment = "sandbox" | "production";
 
 /** What a grant carries; handlers read it as ctx.props. */
 export interface GrantProps {
   apiKey: string;
+  /** "api_key" when the caller presented its own key: full access, as before. */
+  source?: "oauth" | "api_key";
   environment: StablesEnvironment;
   apiKeyId?: string;
   email?: string;

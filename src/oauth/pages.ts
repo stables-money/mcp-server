@@ -109,7 +109,12 @@ const HERO_TITLE = "Connect your AI agent";
 const HERO_SUB =
   "Let it move money and manage customers through Stables, with the access you approve.";
 
-export function consentPage(details: ConsentDescription, handle: string): string {
+export function consentPage(
+  details: ConsentDescription,
+  handle: string,
+  options: { requestsChanges?: boolean } = {}
+): string {
+  const changes = options.requestsChanges === true;
   const name = escapeHtml(details.clientName);
   const origin = details.clientDomain
     ? `Published by <strong>${escapeHtml(details.clientDomain)}</strong>.`
@@ -124,6 +129,7 @@ export function consentPage(details: ConsentDescription, handle: string): string
     body: `<h2>Connect ${name} to Stables?</h2>
 <p class="sub">${origin} Access will be sent to <strong>${escapeHtml(details.redirectHost)}</strong>.</p>
 ${loopback}
+${changes ? `<p class="warn"><strong>${name} is asking for permission to make changes,</strong> including moving money. Choose "Read only" below if you only want it to look.</p>` : ""}
 <p class="notice">Next you'll sign in with your Stables dashboard account and choose an organisation. Allowing creates an API key there named after ${name}; revoke it any time under Developer → API keys.</p>
 <form method="post" autocomplete="off" onsubmit="if(this.dataset.sent)return false;this.dataset.sent=1;setTimeout(()=>{for(const b of this.querySelectorAll('button'))b.disabled=true},0);">
   <input type="hidden" name="handle" value="${escapeHtml(handle)}">
@@ -133,6 +139,13 @@ ${loopback}
       <span><span class="env-name">Sandbox</span><span class="env-desc">Test data, no real money. Keys start with <code>sti_test_</code>.</span></span></label>
     <label class="env"><input type="radio" name="environment" value="production">
       <span><span class="env-name">Production</span><span class="env-desc">Live organisation. The agent can move real money.</span></span></label>
+  </div>
+  <label class="lbl">Access</label>
+  <div class="env-list">
+    <label class="env"><input type="radio" name="access" value="read"${changes ? "" : " checked"}>
+      <span><span class="env-name">Read only</span><span class="env-desc">See customers, balances, quotes and transfers. Nothing in your account changes.</span></span></label>
+    <label class="env"><input type="radio" name="access" value="write"${changes ? " checked" : ""}>
+      <span><span class="env-name">Read and make changes</span><span class="env-desc">Also create customers, quotes and transfers, including moving money. Agents such as Claude ask you to confirm each change.</span></span></label>
   </div>
   <div class="actions">
     <button type="submit" name="decision" value="approve" class="btn btn-primary">Allow and sign in</button>

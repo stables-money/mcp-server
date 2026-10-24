@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.6.0] - 2026-10-25
+
+Safer agent connections: labelled tools, read-only by default.
+
+### Added
+- **Every tool is labelled.** Each of the 51 tools now carries a title and
+  MCP annotations: reads are `readOnlyHint`, every change (including any
+  money movement) is `destructiveHint`, so clients such as Claude ask the
+  person to confirm each one. `create_transfer` and `create_webhook` are also
+  `openWorldHint`. The table lives in `src/tool-policy.ts`, and the server
+  refuses to start if a tool is missing from it.
+- **Read and write scopes.** OAuth connections get `stables:read`; the consent
+  page offers "Read only" (the default) or "Read and make changes"
+  (`stables:write`). A read-only connection still sees the write tools, and
+  calling one answers 403 `insufficient_scope` naming `stables:write`, which
+  MCP clients use to ask the person for more access. The protected resource
+  metadata advertises only `stables:read`.
+
+### Changed
+- An agent connected through OAuth can no longer create or revoke API keys
+  (`create_api_key`, `revoke_api_key` are hidden). Listing keys still works.
+- Callers that send their own API key keep full access, unchanged.
+- Connections made before this release keep read and write access (the old
+  `stables` scope).
+
 ## [2.5.2] - 2026-10-24
 
 ### Fixed
