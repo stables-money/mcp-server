@@ -273,6 +273,14 @@ function renderOAuthError(error: unknown): Response {
     );
   }
   if (error instanceof OAuthStepError) {
+    console.error(
+      JSON.stringify({
+        event: "oauth_step_failed",
+        step: error.step,
+        status: error.status,
+        detail: error.detail?.slice(0, 300),
+      })
+    );
     return html(errorPage("Connection failed", error.message), error.status === 403 ? 403 : 400);
   }
   throw error;
