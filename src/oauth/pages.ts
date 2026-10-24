@@ -125,7 +125,7 @@ export function consentPage(details: ConsentDescription, handle: string): string
 <p class="sub">${origin} Access will be sent to <strong>${escapeHtml(details.redirectHost)}</strong>.</p>
 ${loopback}
 <p class="notice">Next you'll sign in with your Stables dashboard account and choose an organisation. Allowing creates an API key there named after ${name}; revoke it any time under Developer → API keys.</p>
-<form method="post" autocomplete="off" onsubmit="if(this.dataset.sent)return false;this.dataset.sent=1;for(const b of this.querySelectorAll('button'))b.disabled=true;">
+<form method="post" autocomplete="off" onsubmit="if(this.dataset.sent)return false;this.dataset.sent=1;setTimeout(()=>{for(const b of this.querySelectorAll('button'))b.disabled=true},0);">
   <input type="hidden" name="handle" value="${escapeHtml(handle)}">
   <label class="lbl">Environment</label>
   <div class="env-list">
