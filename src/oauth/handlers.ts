@@ -28,6 +28,7 @@ import {
 } from "./auth0.js";
 import { consentPage, errorPage } from "./pages.js";
 import {
+  CONNECTION_TTL_SECONDS,
   LEGACY_SCOPE,
   READ_SCOPE,
   SCOPE,
@@ -214,8 +215,22 @@ async function callback(request: Request, env: OAuthEnv, oauth: OAuthHelpers): P
     redirectUri: `${origin}/callback`,
     verifier: data.verifier,
   });
-  const identity = identityFromIdToken(tokens.id_token);
+  const identity = identityFromIdToken(tokens.id_token, config);
+  if (!identity.mfa) {
+    // The post-login action requires MFA for this client, so a token without
+    // it means that action was bypassed or changed.
+    console.warn(
+      JSON.stringify({ event: "oauth_signin_without_mfa", environment: data.environment, sub: identity.sub })
+    );
+    if (env.MCP_REQUIRE_MFA === "enforce") {
+      throw new OAuthStepError(
+        "identity",
+        "This sign-in did not use two-factor authentication. Set up an authenticator for your Stables account, then connect again."
+      );
+    }
+  }
   const clientName = (await clientNameFor(oauth, original)) ?? "MCP client";
+  const canWrite = data.scope.includes(WRITE_SCOPE);
 
   const minted = await mintApiKey({
     environment: data.environment,
@@ -225,8 +240,12 @@ async function callback(request: Request, env: OAuthEnv, oauth: OAuthHelpers): P
       source: "mcp_oauth",
       client: clientName,
       user: identity.email ?? identity.sub,
-      access: data.scope.includes(WRITE_SCOPE) ? "read_write" : "read",
+      access: canWrite ? "read_write" : "read",
     },
+    // The key ends with the connection, and a read-only connection's key is
+    // read-only at the API too, not just in this server.
+    expiresAt: new Date(Date.now() + CONNECTION_TTL_SECONDS * 1000).toISOString(),
+    access: canWrite ? "full" : "read",
   });
 
   const props: GrantProps = {

@@ -25,6 +25,7 @@ import { StablesApiClient, apiUrlForKey } from "../lib/stables-client.js";
 import { environmentForKey } from "./auth0.js";
 import { handleDefault } from "./handlers.js";
 import {
+  CONNECTION_TTL_SECONDS,
   LEGACY_SCOPE,
   READ_SCOPE,
   SCOPE,
@@ -166,7 +167,7 @@ export function providerFor(origin: string): OAuthProvider<OAuthEnv> {
       resource_name: "Stables MCP server",
     },
     accessTokenTTL: 60 * 60,
-    refreshTokenTTL: 30 * 24 * 60 * 60,
+    refreshTokenTTL: CONNECTION_TTL_SECONDS,
     // A Stables API key presented directly. Sandbox keys go to sandbox and
     // live keys to production, as the stdio server does.
     resolveExternalToken: async ({ token }) => {

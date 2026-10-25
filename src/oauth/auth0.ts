@@ -173,6 +173,8 @@ export interface Identity {
   email?: string;
   name?: string;
   orgId?: string;
+  /** Auth0 reported a second factor in this sign-in. */
+  mfa?: boolean;
 }
 
 /**
@@ -188,15 +190,40 @@ export function decodeJwtPayload(jwt: string): Record<string, unknown> {
   return JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
 }
 
-export function identityFromIdToken(idToken: string): Identity {
+/** Seconds of clock skew allowed when checking the ID token's expiry. */
+const CLOCK_SKEW_SECONDS = 60;
+
+/**
+ * Checks the ID token was issued by our Auth0 tenant, for this client, and
+ * has not expired, then reads who signed in. `mfa` says whether Auth0
+ * reports a second factor in this sign-in (`amr` includes "mfa").
+ */
+export function identityFromIdToken(
+  idToken: string,
+  expected: { domain: string; clientId: string },
+  nowSeconds: number = Math.floor(Date.now() / 1000)
+): Identity {
   const payload = decodeJwtPayload(idToken);
+  if (payload.iss !== `https://${expected.domain}/`) {
+    throw new OAuthStepError("identity", "The sign-in came from an unexpected issuer.");
+  }
+  const aud = payload.aud;
+  const audiences = Array.isArray(aud) ? aud : [aud];
+  if (!audiences.includes(expected.clientId)) {
+    throw new OAuthStepError("identity", "The sign-in was issued for a different application.");
+  }
+  if (typeof payload.exp !== "number" || payload.exp + CLOCK_SKEW_SECONDS < nowSeconds) {
+    throw new OAuthStepError("identity", "The sign-in has expired. Please sign in again.");
+  }
   const sub = typeof payload.sub === "string" ? payload.sub : "";
   if (!sub) throw new OAuthStepError("identity", "ID token has no subject.");
+  const amr = Array.isArray(payload.amr) ? payload.amr : [];
   return {
     sub,
     email: typeof payload.email === "string" ? payload.email.toLowerCase() : undefined,
     name: typeof payload.name === "string" ? payload.name : undefined,
     orgId: typeof payload.org_id === "string" ? payload.org_id : undefined,
+    mfa: amr.includes("mfa"),
   };
 }
 
@@ -227,6 +254,10 @@ export async function mintApiKey(
     accessToken: string;
     name: string;
     metadata?: Record<string, string>;
+    /** ISO time the key stops working; the API caps it at a year. */
+    expiresAt?: string;
+    /** "read" keys may only read; the API refuses changes with 403. */
+    access?: "full" | "read";
   },
   fetchImpl: typeof fetch = fetch
 ): Promise<MintedKey> {
@@ -238,7 +269,12 @@ export async function mintApiKey(
       "idempotency-key": crypto.randomUUID(),
       "user-agent": SERVER_USER_AGENT,
     },
-    body: JSON.stringify({ name: params.name, metadata: params.metadata }),
+    body: JSON.stringify({
+      name: params.name,
+      metadata: params.metadata,
+      expiresAt: params.expiresAt,
+      access: params.access,
+    }),
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => "");

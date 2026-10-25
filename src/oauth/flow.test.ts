@@ -131,10 +131,18 @@ function form(fields: Record<string, string>, cookie: string): RequestInit {
   };
 }
 
+/** An ID token as Auth0 issues it for this client after an MFA sign-in; claims override. */
 function unsignedJwt(payload: Record<string, unknown>): string {
   const enc = (o: unknown) =>
     Buffer.from(JSON.stringify(o)).toString("base64url").replace(/=+$/, "");
-  return `${enc({ alg: "RS256", typ: "JWT" })}.${enc(payload)}.signature`;
+  const claims = {
+    iss: `https://${AUTH0_DOMAIN}/`,
+    aud: "auth0-client-id",
+    exp: Math.floor(Date.now() / 1000) + 600,
+    amr: ["mfa"],
+    ...payload,
+  };
+  return `${enc({ alg: "RS256", typ: "JWT" })}.${enc(claims)}.signature`;
 }
 
 async function s256(verifier: string): Promise<string> {
@@ -426,6 +434,11 @@ describe("OAuth flow end to end", () => {
     const mintBody = JSON.parse(String(mintCall[1]?.body));
     expect(mintBody.name).toBe("Claude via MCP (bernardo@stables.money)");
     expect(mintBody.metadata).toMatchObject({ source: "mcp_oauth", client: "Claude" });
+    // The key is read-only at the API and ends with the connection (30 days).
+    expect(mintBody.access).toBe("read");
+    const lifetimeDays = (Date.parse(mintBody.expiresAt) - Date.now()) / 86_400_000;
+    expect(lifetimeDays).toBeGreaterThan(29.9);
+    expect(lifetimeDays).toBeLessThanOrEqual(30);
 
     // 4. The client trades the code for tokens.
     const token = await call(env, "/oauth/token", {
@@ -596,6 +609,7 @@ describe("OAuth flow end to end", () => {
     expect(pageHtml).toContain("is asking for permission to make changes");
     expect(pageHtml).toMatch(/value="write" checked/);
     expect(scope.split(" ")).toContain("stables:write");
+    expect(lastMintBody().access).toBe("full");
 
     const write = await mcp(env, createCustomer(), { authorization: `Bearer ${accessToken}` });
     expect(write.status).toBe(200);
@@ -651,6 +665,72 @@ describe("OAuth flow end to end", () => {
     });
     expect(back.status).toBe(403);
     expect(await back.text()).toContain("create API keys");
+  });
+
+  function lastMintBody(): Record<string, unknown> {
+    const mints = upstream.mock.calls.filter(([u]) => String(u).endsWith("/dashboard/v1/api-keys"));
+    return JSON.parse(String(mints[mints.length - 1][1]?.body));
+  }
+
+  /** Runs consent and the Auth0 return with this ID token; answers the callback response. */
+  async function callbackWith(claims: Record<string, unknown>) {
+    upstream.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/oauth/token")) {
+        return Response.json({ access_token: "t", id_token: unsignedJwt(claims) });
+      }
+      if (url.endsWith("/dashboard/v1/api-keys")) {
+        return Response.json({ apiKey: { apiKeyId: "key-x", prefix: "p" }, plaintextKey: MINTED_KEY });
+      }
+      throw new Error(`unexpected upstream fetch ${url}`);
+    });
+    const clientId = await registerClient();
+    const page = await call(env, authorizeUrl(clientId, await s256("v".repeat(43))));
+    const handle = (await page.text()).match(/name="handle" value="([^"]+)"/)![1];
+    const approved = await call(
+      env,
+      "/authorize",
+      form({ handle, decision: "approve", environment: "sandbox" }, cookiesFrom(page))
+    );
+    const state = new URL(approved.headers.get("location")!).searchParams.get("state")!;
+    return call(env, `/callback?code=c&state=${encodeURIComponent(state)}`, {
+      headers: { cookie: cookiesFrom(approved) },
+    });
+  }
+
+  const mintCalls = () =>
+    upstream.mock.calls.filter(([u]) => String(u).endsWith("/dashboard/v1/api-keys"));
+
+  it.each([
+    ["another issuer", { iss: "https://evil.example/" }, "unexpected issuer"],
+    ["another application", { aud: "someone-else" }, "different application"],
+    ["an expired token", { exp: Math.floor(Date.now() / 1000) - 3600 }, "expired"],
+  ])("refuses an ID token from %s and mints no key", async (_label, claims, message) => {
+    const back = await callbackWith({ sub: "auth0|u", email: "x@y.z", ...claims });
+    expect(back.status).toBe(400);
+    expect(await back.text()).toContain(message);
+    expect(mintCalls()).toHaveLength(0);
+  });
+
+  it("accepts an audience list that includes this application", async () => {
+    const back = await callbackWith({ sub: "auth0|u", aud: ["auth0-client-id", "other"] });
+    expect(back.status).toBe(302);
+  });
+
+  it("logs a sign-in without MFA but still connects until enforcement is on", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const back = await callbackWith({ sub: "auth0|u", amr: undefined });
+    expect(back.status).toBe(302);
+    expect(warn.mock.calls.map((c) => String(c[0])).join()).toContain("oauth_signin_without_mfa");
+  });
+
+  it("refuses a sign-in without MFA when enforcement is on", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    env.MCP_REQUIRE_MFA = "enforce";
+    const back = await callbackWith({ sub: "auth0|u", amr: ["pwd"] });
+    expect(back.status).toBe(400);
+    expect(await back.text()).toContain("two-factor");
+    expect(mintCalls()).toHaveLength(0);
   });
 
   it("refuses the consent page without an identity provider configured", async () => {
