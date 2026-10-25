@@ -221,7 +221,11 @@ async function callback(request: Request, env: OAuthEnv, oauth: OAuthHelpers): P
     // it means that action was bypassed or changed.
     // eslint-disable-next-line no-console
     console.warn(
-      JSON.stringify({ event: "oauth_signin_without_mfa", environment: data.environment, sub: identity.sub })
+      JSON.stringify({
+        event: "oauth_signin_without_mfa",
+        environment: data.environment,
+        sub: identity.sub,
+      })
     );
     if (env.MCP_REQUIRE_MFA === "enforce") {
       throw new OAuthStepError(

@@ -680,7 +680,10 @@ describe("OAuth flow end to end", () => {
         return Response.json({ access_token: "t", id_token: unsignedJwt(claims) });
       }
       if (url.endsWith("/dashboard/v1/api-keys")) {
-        return Response.json({ apiKey: { apiKeyId: "key-x", prefix: "p" }, plaintextKey: MINTED_KEY });
+        return Response.json({
+          apiKey: { apiKeyId: "key-x", prefix: "p" },
+          plaintextKey: MINTED_KEY,
+        });
       }
       throw new Error(`unexpected upstream fetch ${url}`);
     });
