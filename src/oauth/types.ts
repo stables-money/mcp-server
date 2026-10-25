@@ -27,6 +27,12 @@ export const SUPPORTED_SCOPES = [READ_SCOPE, WRITE_SCOPE, "offline_access", LEGA
 export type StablesEnvironment = "sandbox" | "production";
 
 /** What a grant carries; handlers read it as ctx.props. */
+/**
+ * How long a connection lasts before the person signs in again: the refresh
+ * token's lifetime, and the expiry of the API key minted for it.
+ */
+export const CONNECTION_TTL_SECONDS = 30 * 24 * 60 * 60;
+
 export interface GrantProps {
   apiKey: string;
   /** "api_key" when the caller presented its own key: full access, as before. */
@@ -51,6 +57,11 @@ export interface OAuthEnv {
   AUTH0_CLIENT_ID?: string;
   /** Worker secret. */
   AUTH0_CLIENT_SECRET?: string;
+  /**
+   * "enforce" refuses a sign-in whose ID token reports no second factor;
+   * anything else only logs it, so the check can be watched before it bites.
+   */
+  MCP_REQUIRE_MFA?: string;
   /** Worker secret shared with api-lambda-authoriser; unset = unsigned. */
   MCP_GATEWAY_SIGNING_SECRET?: string;
 }
