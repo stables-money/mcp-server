@@ -69,11 +69,20 @@ export function resourceFor(origin: string): string {
   return `${origin}/mcp`;
 }
 
-export function apiClientFor(apiKey: string, env: OAuthEnv): StablesApiClient | null {
+/**
+ * The gateway lets a signed request past its IP allowlist. Only keys this
+ * server minted at sign-in (behind Auth0 and MFA) are signed: signing a key
+ * the caller presents would let any leaked key in from anywhere.
+ */
+export function apiClientFor(
+  apiKey: string,
+  env: OAuthEnv,
+  source: GrantProps["source"]
+): StablesApiClient | null {
   const baseUrl = apiUrlForKey(apiKey);
   if (!baseUrl) return null;
   return new StablesApiClient(apiKey, baseUrl, {
-    gatewaySigningSecret: env.MCP_GATEWAY_SIGNING_SECRET,
+    gatewaySigningSecret: source === "oauth" ? env.MCP_GATEWAY_SIGNING_SECRET : undefined,
     userAgent: `stables-mcp-server/${SERVER_VERSION} (hosted)`,
   });
 }
@@ -84,7 +93,7 @@ async function serveAuthorizedMcp(
   props: GrantProps | undefined,
   auth: OAuthResourceAuth | undefined
 ): Promise<Response> {
-  const client = props?.apiKey ? apiClientFor(props.apiKey, env) : null;
+  const client = props?.apiKey ? apiClientFor(props.apiKey, env, props.source) : null;
   if (!client) {
     return withCors(
       json(
@@ -166,6 +175,16 @@ export function providerFor(origin: string): OAuthProvider<OAuthEnv> {
         throw new ExternalTokenError("invalid_token", {
           description:
             "Unrecognised API key. Send a sti_test_ (sandbox) or sti_live_ (production) key, or connect with OAuth.",
+          statusCode: 401,
+        });
+      }
+      // Production only accepts calls from allowlisted addresses, and this
+      // server's are not, so a live key sent here could never work. Say how
+      // to connect instead of letting the gateway answer 403.
+      if (environmentForKey(token) === "production") {
+        throw new ExternalTokenError("invalid_token", {
+          description:
+            "Production API keys can't be used through the hosted server. Connect by signing in (OAuth), or run stables-mcp-server locally from an allowlisted address.",
           statusCode: 401,
         });
       }
