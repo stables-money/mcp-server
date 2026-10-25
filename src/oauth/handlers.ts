@@ -219,6 +219,7 @@ async function callback(request: Request, env: OAuthEnv, oauth: OAuthHelpers): P
   if (!identity.mfa) {
     // The post-login action requires MFA for this client, so a token without
     // it means that action was bypassed or changed.
+    // eslint-disable-next-line no-console
     console.warn(
       JSON.stringify({ event: "oauth_signin_without_mfa", environment: data.environment, sub: identity.sub })
     );
