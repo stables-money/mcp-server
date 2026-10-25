@@ -45,3 +45,17 @@ custom_domain = true
 name = "RATE_LIMITER"
 namespace_id = "1001"
 simple = { limit = 120, period = 60 }
+
+# Per-IP ceiling checked first on every request, so made-up tokens can't each
+# get their own bucket. Generous: Claude.ai and ChatGPT share a few egress IPs.
+[[ratelimits]]
+name = "IP_RATE_LIMITER"
+namespace_id = "1002"
+simple = { limit = 1000, period = 60 }
+
+# Tight per-IP limit on the browser sign-in pages (/authorize, /callback),
+# which write to KV on every visit.
+[[ratelimits]]
+name = "SIGNIN_RATE_LIMITER"
+namespace_id = "1003"
+simple = { limit = 20, period = 60 }
