@@ -60,7 +60,11 @@ describe("per-IP limits before the per-caller one", () => {
   it("made-up tokens from one host share the host's IP bucket", async () => {
     const ip = limiter(() => false);
     const caller = limiter(() => true);
-    const e: Env = { RATE_LIMITER: caller, IP_RATE_LIMITER: ip, SIGNIN_RATE_LIMITER: limiter(() => true) };
+    const e: Env = {
+      RATE_LIMITER: caller,
+      IP_RATE_LIMITER: ip,
+      SIGNIN_RATE_LIMITER: limiter(() => true),
+    };
     for (const token of ["fake-1", "fake-2"]) {
       const res = await worker.fetch(
         new Request(`${ORIGIN}/mcp`, {
@@ -78,10 +82,18 @@ describe("per-IP limits before the per-caller one", () => {
   it("the sign-in pages use the tight sign-in limiter, other paths the IP ceiling", async () => {
     const ip = limiter(() => true);
     const signin = limiter(() => false);
-    const e: Env = { RATE_LIMITER: limiter(() => true), IP_RATE_LIMITER: ip, SIGNIN_RATE_LIMITER: signin };
+    const e: Env = {
+      RATE_LIMITER: limiter(() => true),
+      IP_RATE_LIMITER: ip,
+      SIGNIN_RATE_LIMITER: signin,
+    };
     const headers = { "cf-connecting-ip": "5.6.7.8" };
-    expect((await worker.fetch(new Request(`${ORIGIN}/authorize?x=1`, { headers }), e)).status).toBe(429);
-    expect((await worker.fetch(new Request(`${ORIGIN}/callback`, { headers }), e)).status).toBe(429);
+    expect(
+      (await worker.fetch(new Request(`${ORIGIN}/authorize?x=1`, { headers }), e)).status
+    ).toBe(429);
+    expect((await worker.fetch(new Request(`${ORIGIN}/callback`, { headers }), e)).status).toBe(
+      429
+    );
     expect((await worker.fetch(new Request(`${ORIGIN}/health`, { headers }), e)).status).toBe(200);
     expect(signin.keys).toEqual(["ip:5.6.7.8", "ip:5.6.7.8"]);
     expect(ip.keys).toEqual(["ip:5.6.7.8"]);
