@@ -231,7 +231,7 @@ describe("discovery", () => {
 });
 
 describe("API keys as bearer tokens", () => {
-  it("serves a tool call with the caller's key, signed for the gateway", async () => {
+  it("serves a tool call with the caller's key, unsigned: only sign-in keys pass the allowlist", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(customersResponse());
     const env = makeEnv({ MCP_GATEWAY_SIGNING_SECRET: "gateway-secret" });
     const res = await mcp(env, rpc("tools/call", { name: "list_customers", arguments: {} }), {
@@ -243,11 +243,18 @@ describe("API keys as bearer tokens", () => {
     const headers = opts?.headers as Record<string, string>;
     expect(headers.Authorization).toBe(`Bearer ${TEST_KEY}`);
     expect(headers["User-Agent"]).toMatch(/^stables-mcp-server\//);
-    const signature = headers[GATEWAY_SIGNATURE_HEADER];
-    const t = Number(signature.match(/^t=(\d+),v1=/)?.[1]);
-    expect(signature).toBe(
-      await signGatewayRequest("gateway-secret", "GET", "/api/v1/customers", t)
-    );
+    expect(headers[GATEWAY_SIGNATURE_HEADER]).toBeUndefined();
+  });
+
+  it("refuses a production key and says how to connect instead", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const env = makeEnv({ MCP_GATEWAY_SIGNING_SECRET: "gateway-secret" });
+    const res = await mcp(env, rpc("tools/call", { name: "list_customers", arguments: {} }), {
+      authorization: "Bearer sti_live_abc123_secretsecretsecretsecret",
+    });
+    expect(res.status).toBe(401);
+    expect(JSON.stringify(await res.json())).toContain("signing in");
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("accepts the key as X-Api-Key too", async () => {
@@ -517,6 +524,21 @@ describe("OAuth flow end to end", () => {
     expect(stale.status).toBe(401);
     const fresh = await mcp(env, listCustomers, { authorization: `Bearer ${second.accessToken}` });
     expect(fresh.status).toBe(200);
+  });
+
+  it("signs a sign-in connection's calls so the gateway lets them past its allowlist", async () => {
+    env.MCP_GATEWAY_SIGNING_SECRET = "gateway-secret";
+    const { accessToken } = await connect();
+    const res = await mcp(env, rpc("tools/call", { name: "list_customers", arguments: {} }), {
+      authorization: `Bearer ${accessToken}`,
+    });
+    expect(res.status).toBe(200);
+    const apiCall = upstream.mock.calls.find(([u]) => String(u).endsWith("/api/v1/customers"))!;
+    const signature = (apiCall[1]?.headers as Record<string, string>)[GATEWAY_SIGNATURE_HEADER];
+    const t = Number(signature.match(/^t=(\d+),v1=/)?.[1]);
+    expect(signature).toBe(
+      await signGatewayRequest("gateway-secret", "GET", "/api/v1/customers", t)
+    );
   });
 
   it("connecting another client leaves the first client's connection alone", async () => {
