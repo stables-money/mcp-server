@@ -23,6 +23,7 @@ import {
   mintApiKey,
   parseEnvironment,
   randomVerifier,
+  revokeApiKey,
   s256,
 } from "./auth0.js";
 import { consentPage, errorPage } from "./pages.js";
@@ -237,11 +238,17 @@ async function callback(request: Request, env: OAuthEnv, oauth: OAuthHelpers): P
     orgId: identity.orgId,
     clientName,
   };
+  // One grant per user, organisation and environment, so re-authorising
+  // sandbox never revokes a production grant for the same person.
+  const userId = [data.environment, identity.orgId ?? "-", identity.sub]
+    .join("|")
+    .replace(/:/g, "_");
+  // Read before completeAuthorization, which drops earlier grants of the
+  // same client by itself but never the keys behind them.
+  const previous = await previousConnections(oauth, userId, clientName);
   const { redirectTo } = await oauth.completeAuthorization({
     request: original,
-    // One grant per user, organisation and environment, so re-authorising
-    // sandbox never revokes a production grant for the same person.
-    userId: [data.environment, identity.orgId ?? "-", identity.sub].join("|").replace(/:/g, "_"),
+    userId,
     metadata: {
       environment: data.environment,
       client: clientName,
@@ -253,7 +260,84 @@ async function callback(request: Request, env: OAuthEnv, oauth: OAuthHelpers): P
     scope: data.scope,
     props,
   });
+  await retireConnections(oauth, previous, {
+    userId,
+    environment: data.environment,
+    accessToken: tokens.access_token,
+    keepApiKeyId: minted.apiKeyId,
+  });
   return redirect(headers, redirectTo);
+}
+
+interface PreviousConnection {
+  grantId: string;
+  apiKeyId: string;
+}
+
+/**
+ * This person's earlier connections from the same client to the same
+ * organisation and environment. Reconnecting replaces them, so each one's
+ * key would otherwise stay live in the dashboard with nothing using it.
+ * Other clients (ChatGPT next to Claude) are left alone.
+ */
+async function previousConnections(
+  oauth: OAuthHelpers,
+  userId: string,
+  clientName: string
+): Promise<PreviousConnection[]> {
+  const found: PreviousConnection[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await oauth.listUserGrants(userId, { cursor });
+    for (const grant of page.items) {
+      const metadata = (grant.metadata ?? {}) as { client?: string; apiKeyId?: string };
+      if (metadata.client === clientName && metadata.apiKeyId) {
+        found.push({ grantId: grant.id, apiKeyId: metadata.apiKeyId });
+      }
+    }
+    cursor = page.cursor;
+  } while (cursor);
+  return found;
+}
+
+/**
+ * Revokes the replaced connections' keys and grants. Best effort: the new
+ * connection already works, so a failure here is logged, never shown.
+ */
+async function retireConnections(
+  oauth: OAuthHelpers,
+  previous: PreviousConnection[],
+  params: {
+    userId: string;
+    environment: StablesEnvironment;
+    accessToken: string;
+    keepApiKeyId: string;
+  }
+): Promise<void> {
+  const stale = previous.filter((p) => p.apiKeyId !== params.keepApiKeyId);
+  const results = await Promise.allSettled(
+    stale.map(async (p) => {
+      await revokeApiKey({
+        environment: params.environment,
+        accessToken: params.accessToken,
+        apiKeyId: p.apiKeyId,
+      });
+      // completeAuthorization may already have dropped it (same client).
+      await oauth.revokeGrant(p.grantId, params.userId).catch(() => undefined);
+    })
+  );
+  const failed = results.filter((r) => r.status === "rejected");
+  if (failed.length > 0) {
+    // eslint-disable-next-line no-console
+    console.error(
+      JSON.stringify({
+        event: "oauth_retire_previous_failed",
+        failed: failed.length,
+        of: stale.length,
+        reason: String((failed[0] as PromiseRejectedResult).reason).slice(0, 300),
+      })
+    );
+  }
 }
 
 async function clientNameFor(
