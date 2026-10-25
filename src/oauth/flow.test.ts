@@ -279,8 +279,15 @@ describe("OAuth flow end to end", () => {
 
   beforeEach(() => {
     env = makeEnv();
+    let minted = 0;
     upstream = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input instanceof Request ? input.url : input);
+      if (
+        init?.method === "DELETE" &&
+        url.startsWith("https://api.sandbox.stables.money/dashboard/v1/api-keys/")
+      ) {
+        return new Response(null, { status: 204 });
+      }
       if (url === `https://${AUTH0_DOMAIN}/oauth/token`) {
         return Response.json({
           access_token: "auth0-access-token",
@@ -293,8 +300,9 @@ describe("OAuth flow end to end", () => {
         });
       }
       if (url === "https://api.sandbox.stables.money/dashboard/v1/api-keys") {
+        minted += 1;
         return Response.json({
-          apiKey: { apiKeyId: "key-1", prefix: "minted" },
+          apiKey: { apiKeyId: `key-${minted}`, prefix: "minted" },
           plaintextKey: MINTED_KEY,
         });
       }
@@ -315,12 +323,12 @@ describe("OAuth flow end to end", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(upstream as unknown as typeof fetch);
   });
 
-  async function registerClient(): Promise<string> {
+  async function registerClient(clientName = "Claude"): Promise<string> {
     const res = await call(env, "/oauth/register", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        client_name: "Claude",
+        client_name: clientName,
         redirect_uris: [CLAUDE_REDIRECT],
         token_endpoint_auth_method: "none",
         grant_types: ["authorization_code", "refresh_token"],
@@ -451,8 +459,10 @@ describe("OAuth flow end to end", () => {
   });
 
   /** Runs consent → Auth0 → token exchange and returns the access token. */
-  async function connect(options: { access?: "read" | "write"; scope?: string } = {}) {
-    const clientId = await registerClient();
+  async function connect(
+    options: { access?: "read" | "write"; scope?: string; clientName?: string } = {}
+  ) {
+    const clientId = await registerClient(options.clientName);
     const verifier = "v".repeat(43);
     const page = await call(env, authorizeUrl(clientId, await s256(verifier), options.scope));
     const pageHtml = await page.text();
@@ -484,6 +494,41 @@ describe("OAuth flow end to end", () => {
     const tokens = await token.json();
     return { pageHtml, accessToken: tokens.access_token as string, scope: tokens.scope as string };
   }
+
+  const revokedKeys = () =>
+    upstream.mock.calls
+      .filter(([, init]) => (init as RequestInit | undefined)?.method === "DELETE")
+      .map(([u]) => String(u).split("/").pop());
+
+  it("reconnecting replaces the earlier connection: its key and grant are revoked", async () => {
+    const first = await connect();
+    const second = await connect();
+    expect(revokedKeys()).toEqual(["key-1"]);
+
+    const del = upstream.mock.calls.find(
+      ([, init]) => (init as RequestInit | undefined)?.method === "DELETE"
+    )!;
+    expect((del[1]?.headers as Record<string, string>).authorization).toBe(
+      "Bearer auth0-access-token"
+    );
+
+    const listCustomers = rpc("tools/call", { name: "list_customers", arguments: {} });
+    const stale = await mcp(env, listCustomers, { authorization: `Bearer ${first.accessToken}` });
+    expect(stale.status).toBe(401);
+    const fresh = await mcp(env, listCustomers, { authorization: `Bearer ${second.accessToken}` });
+    expect(fresh.status).toBe(200);
+  });
+
+  it("connecting another client leaves the first client's connection alone", async () => {
+    const claude = await connect();
+    await connect({ clientName: "ChatGPT" });
+    expect(revokedKeys()).toEqual([]);
+
+    const res = await mcp(env, rpc("tools/call", { name: "list_customers", arguments: {} }), {
+      authorization: `Bearer ${claude.accessToken}`,
+    });
+    expect(res.status).toBe(200);
+  });
 
   const createCustomer = () =>
     rpc("tools/call", {

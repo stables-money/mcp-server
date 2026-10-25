@@ -263,6 +263,30 @@ export async function mintApiKey(
   };
 }
 
+/**
+ * Revokes a key minted for an earlier connection. Already revoked or gone
+ * (404, 409) counts as done: the person may have revoked it in the dashboard.
+ */
+export async function revokeApiKey(
+  params: { environment: StablesEnvironment; accessToken: string; apiKeyId: string },
+  fetchImpl: typeof fetch = fetch
+): Promise<void> {
+  const response = await fetchImpl(
+    `${API_BASE[params.environment]}/dashboard/v1/api-keys/${encodeURIComponent(params.apiKeyId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        authorization: `Bearer ${params.accessToken}`,
+        "idempotency-key": crypto.randomUUID(),
+        "user-agent": SERVER_USER_AGENT,
+      },
+    }
+  );
+  if (!response.ok && response.status !== 404 && response.status !== 409) {
+    throw new Error(`revoke ${params.apiKeyId} returned ${response.status}`);
+  }
+}
+
 /** API keys are listed by name in the dashboard, so say which agent and who. */
 export function apiKeyName(clientName: string, identity: Identity): string {
   const who = identity.email ?? identity.sub;

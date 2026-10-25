@@ -8,12 +8,12 @@
     "url": "https://github.com/stables-money/mcp-server",
     "source": "github"
   },
-  "version": "2.6.1",
+  "version": "2.6.2",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "stables-mcp-server",
-      "version": "2.6.1",
+      "version": "2.6.2",
       "transport": {
         "type": "stdio"
       },
