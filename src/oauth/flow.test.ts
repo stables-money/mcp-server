@@ -548,9 +548,16 @@ describe("OAuth flow end to end", () => {
     expect(res.status).toBe(200);
     const apiCall = upstream.mock.calls.find(([u]) => String(u).endsWith("/api/v1/customers"))!;
     const signature = (apiCall[1]?.headers as Record<string, string>)[GATEWAY_SIGNATURE_HEADER];
-    const t = Number(signature.match(/^t=(\d+),v1=/)?.[1]);
+    const t = Number(signature.match(/^t=(\d+),v2=/)?.[1]);
     expect(signature).toBe(
-      await signGatewayRequest("gateway-secret", "GET", "/api/v1/customers", t)
+      await signGatewayRequest(
+        "gateway-secret",
+        "GET",
+        "/api/v1/customers",
+        "",
+        `Bearer ${MINTED_KEY}`,
+        t
+      )
     );
   });
 
