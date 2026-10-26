@@ -204,14 +204,23 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
   server.tool(
     "create_transfer",
     "Execute a transfer using an active quote. The quote must not be expired. This initiates real money movement, so get explicit human approval first. " +
-      `For payouts in ${ENHANCED_BENEFICIARY_CURRENCIES} you must also supply recipientType, the full beneficiary address, and dateOfBirth when the recipient is an individual. `,
+      `For payouts in ${ENHANCED_BENEFICIARY_CURRENCIES} you must also supply recipientType, the full beneficiary address, and dateOfBirth when the recipient is an individual. ` +
+      "To pay one of the organisation's saved beneficiaries, set destinationType to beneficiary and pass its beneficiaryId instead of bank details.",
     {
       customerId: z.string().describe("The customer ID for this transfer"),
       quoteId: z.string().describe("The quote ID to execute"),
       destinationType: z
-        .enum(["bank", "crypto"])
+        .enum(["bank", "crypto", "beneficiary"])
         .default("bank")
-        .describe("Payout target: a bank account (off-ramp) or a wallet address"),
+        .describe(
+          "Payout target: a bank account (off-ramp), a wallet address, or a saved beneficiary"
+        ),
+      beneficiaryId: z
+        .string()
+        .optional()
+        .describe(
+          "Saved beneficiary id when destinationType is beneficiary. It supplies the recipient and bank details, so the bank fields are ignored; archived beneficiaries are refused"
+        ),
 
       ...bankDestinationShape,
 
@@ -260,6 +269,11 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
             network: input.destinationNetwork,
             address: input.destinationAddress,
           };
+        } else if (input.destinationType === "beneficiary") {
+          if (!input.beneficiaryId) {
+            throw new Error("A beneficiary destination needs beneficiaryId");
+          }
+          destination = { type: "beneficiary", beneficiary_id: input.beneficiaryId };
         } else {
           destination = buildBankDestination(input);
         }

@@ -348,7 +348,19 @@ export interface CryptoTransferDestination {
   address: string;
 }
 
-export type TransferDestination = BankTransferDestination | CryptoTransferDestination;
+/**
+ * One of the organisation's saved beneficiaries, which supplies the recipient
+ * and bank details. The transfer is still made for the request's customer_id.
+ */
+export interface BeneficiaryTransferDestination {
+  type: "beneficiary";
+  beneficiary_id: string;
+}
+
+export type TransferDestination =
+  | BankTransferDestination
+  | CryptoTransferDestination
+  | BeneficiaryTransferDestination;
 
 /** Where the customer sends funds for an offramp. Was `collectionInstructions`. */
 export interface SourceDepositInstructions {
