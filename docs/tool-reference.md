@@ -253,13 +253,14 @@ Check bank payout details against the corridor's rules without creating anything
 
 #### create_transfer
 
-Execute a transfer using an active quote. The quote must not be expired. This initiates real money movement, so get explicit human approval first. For payouts in AED, CAD, EUR, GBP, MXN, USD you must also supply recipientType, the full beneficiary address, and dateOfBirth when the recipient is an individual.
+Execute a transfer using an active quote. The quote must not be expired. This initiates real money movement, so get explicit human approval first. For payouts in AED, CAD, EUR, GBP, MXN, USD you must also supply recipientType, the full beneficiary address, and dateOfBirth when the recipient is an individual. To pay one of the organisation's saved beneficiaries, set destinationType to beneficiary and pass its beneficiaryId instead of bank details.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID for this transfer |
 | `quoteId` | string | Yes | The quote ID to execute |
-| `destinationType` | `bank` \| `crypto` | No | Payout target: a bank account (off-ramp) or a wallet address. Default: `"bank"`. |
+| `destinationType` | `bank` \| `crypto` \| `beneficiary` | No | Payout target: a bank account (off-ramp), a wallet address, or a saved beneficiary. Default: `"bank"`. |
+| `beneficiaryId` | string | No | Saved beneficiary id when destinationType is beneficiary. It supplies the recipient and bank details, so the bank fields are ignored; archived beneficiaries are refused |
 | `accountHolderName` | string | No | Account holder's full name, or the company name when recipientType is business |
 | `bankName` | string | No | Name of the destination bank |
 | `bankCountry` | string | No | Bank country, ISO 2-letter (e.g. 'AU', 'US') |

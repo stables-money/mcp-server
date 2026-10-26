@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.7] - 2026-10-26
+
+### Added
+- `create_transfer` can pay a saved beneficiary: set `destinationType` to
+  `beneficiary` and pass `beneficiaryId`. The API takes the recipient and bank
+  details from the saved beneficiary, so no bank fields are needed.
+
 ## [2.6.1] - 2026-10-25
 
 ### Added
