@@ -17,6 +17,7 @@ const CATEGORIES = [
   ["Entitlements", ["list_available_entitlements", "request_entitlements", "submit_entitlement_requirements"]],
   ["Quotes", ["create_quote", "get_quote"]],
   ["Transfers", ["validate_payment_method", "create_transfer", "get_transfer", "list_transfers"]],
+  ["Saved beneficiaries", ["list_beneficiaries", "get_beneficiary", "create_beneficiary", "archive_beneficiary"]],
   ["Payment routes", ["create_virtual_account", "list_virtual_accounts", "update_virtual_account", "get_virtual_account_history", "update_route_destination", "list_route_whitelist", "add_route_whitelist_account", "update_route_whitelist_account", "register_route_payid"]],
   ["Compliance requests (RFIs)", ["list_rfis", "list_customer_rfis", "get_rfi", "get_rfi_evidence_form", "submit_rfi_evidence", "get_kyc_capabilities"]],
   ["Documents", ["add_document", "list_documents", "get_document_download_url", "delete_document"]],

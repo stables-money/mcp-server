@@ -313,6 +313,71 @@ List transfers with optional filters for status, type, or customer
 | `pageSize` | number | No | Number of transfers per page (default: 20) |
 | `pageToken` | string | No | Token for the next page of results |
 
+### Saved beneficiaries
+
+#### list_beneficiaries
+
+List the organisation's saved beneficiaries, most recently paid first. Use it to find the beneficiaryId that create_transfer takes with destinationType 'beneficiary'.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `currency` | string | No | Only beneficiaries paid in this currency (e.g. 'EUR') |
+| `network` | `bank` \| `swift` | No | Only beneficiaries paid by this network |
+| `status` | `active` \| `archived` \| `all` | No | Defaults to active. Archived beneficiaries cannot be paid |
+| `search` | string | No | Case-insensitive match on label, account holder or bank name |
+| `pageSize` | number | No | Beneficiaries per page (default 50, max 100) |
+| `pageToken` | string | No | Token for the next page of results |
+
+#### get_beneficiary
+
+Get a saved beneficiary's recipient and bank details, and whether it still passes today's payout rules. Rules tighten over time, so an older beneficiary can need more fields before it can be paid.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `beneficiaryId` | string | Yes | The beneficiary ID to look up |
+
+#### create_beneficiary
+
+Save a recipient and their bank account for a currency and network, so later transfers can pay it by id. The details are validated exactly as a transfer on that network would be. Saving an account that is already saved returns the existing beneficiary with its details refreshed, and revives it if archived.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `network` | `bank` \| `swift` | Yes | Network the beneficiary is paid by: bank = local transfer, swift = international wire |
+| `label` | string | No | Display name (e.g. 'Acme Supplies (EUR)'). Defaults to the account holder name |
+| `accountHolderName` | string | No | Account holder's full name, or the company name when recipientType is business |
+| `bankName` | string | No | Name of the destination bank |
+| `bankCountry` | string | No | Bank country, ISO 2-letter (e.g. 'AU', 'US') |
+| `bankCurrency` | string | No | Payout currency, ISO 3-letter (e.g. 'EUR') |
+| `recipientType` | `individual` \| `business` | No | Beneficiary type. Required for AED, CAD, EUR, GBP, MXN, USD |
+| `dateOfBirth` | string | No | Beneficiary date of birth, YYYY-MM-DD. Required when recipientType is individual for AED, CAD, EUR, GBP, MXN, USD |
+| `addressStreet` | string | No | Beneficiary street address |
+| `addressCity` | string | No | Beneficiary city |
+| `addressState` | string | No | Beneficiary state or region |
+| `addressPostalCode` | string | No | Beneficiary postal code |
+| `addressCountry` | string | No | Beneficiary country, ISO 2-letter. The complete address is required for AED, CAD, EUR, GBP, MXN, USD |
+| `iban` | string | No | IBAN (EU/international) |
+| `accountNumber` | string | No | Bank account number, if not using IBAN |
+| `accountType` | `savings` \| `checking` \| `payment` | No | Account type. Required for CAD and USD bank payouts |
+| `payId` | string | No | PayID alias (AUD only). Requires payIdType |
+| `payIdType` | `email` \| `phone_number` \| `abn` \| `acn` \| `organisation_id` | No | PayID alias type. Required when payId is given |
+| `swiftCode` | string | No | SWIFT code |
+| `bicCode` | string | No | BIC (EUR/GBP international) |
+| `routingNumber` | string | No | ABA routing number (US) |
+| `sortCode` | string | No | Sort code (UK) |
+| `ifscCode` | string | No | IFSC code (India) |
+| `bsbCode` | string | No | BSB code (Australia) |
+| `bankCode` | string | No | Bank code / institution number (CAD) |
+| `branchCode` | string | No | Branch code / transit number (CAD) |
+| `cnaps` | string | No | CNAPS (China) |
+
+#### archive_beneficiary
+
+Archive a saved beneficiary. It leaves active listings and is refused as a transfer destination; transfers already made to it are unaffected. Saving the same account again revives it.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `beneficiaryId` | string | Yes | The beneficiary ID to archive |
+
 ### Payment routes
 
 #### create_virtual_account
