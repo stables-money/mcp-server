@@ -72,7 +72,7 @@ Start a new conversation and ask: **"List my Stables customers"**. The agent cal
 
 The same server is published to npm and runs as a local process over stdio. Use this when your client only supports local servers (Claude Desktop today), when you work against a `sti_local_…` key and your own deployment, or when the client cannot reach the internet.
 
-Requirements: Node.js 18 or later.
+Requirements: Node.js 20 or later.
 
 For Claude Desktop, add this to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows), then quit and reopen Claude Desktop:
 
