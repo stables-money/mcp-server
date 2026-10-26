@@ -253,7 +253,7 @@ Check bank payout details against the corridor's rules without creating anything
 
 #### create_transfer
 
-Execute a transfer using an active quote. The quote must not be expired. This initiates real money movement, so get explicit human approval first. For payouts in AED, CAD, EUR, GBP, MXN, USD you must also supply recipientType, the full beneficiary address, and dateOfBirth when the recipient is an individual. To pay one of the organisation's saved beneficiaries, set destinationType to beneficiary and pass its beneficiaryId instead of bank details.
+Create a transfer from an active quote. The quote must not be expired. With fundingSource fund_transfer (the default) this only creates the transfer and returns deposit instructions; no money moves until someone deposits the funds. With prefund_balance it debits your organisation's balance and starts the payout immediately, so this moves real money: get explicit human approval first. For payouts in AED, CAD, EUR, GBP, MXN, USD you must also supply recipientType, the full beneficiary address, and dateOfBirth when the recipient is an individual. To pay one of the organisation's saved beneficiaries, set destinationType to beneficiary and pass its beneficiaryId instead of bank details.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -290,7 +290,7 @@ Execute a transfer using an active quote. The quote must not be expired. This in
 | `destinationNetwork` | string | No | Blockchain network when destinationType is crypto (e.g. 'polygon') |
 | `destinationAddress` | string | No | Wallet address when destinationType is crypto |
 | `purposeCode` | `PAYMENT_FOR_SERVICES` \| `PAYMENT_FOR_SOFTWARE` \| `PAYMENT_FOR_IMPORTED_GOODS` \| `TRAVEL_SERVICES` \| `VENDOR_CONTRACTOR_PAYOUTS` \| `TRANSFER_TO_OWN_ACCOUNT` \| `INVESTMENT_IN_SHARES` \| `PURCHASE_OF_PROPERTY` \| `REPAYMENT_OF_LOANS` \| `SALARY` \| `PAYMENT_OF_PROPERTY_RENTAL` \| `INFORMATION_SERVICE_CHARGES` \| `ADVERTISING_PR_EXPENSES` \| `ROYALTY_FEES` \| `BROKER_COMMITMENT_FEES` \| `ADVISOR_TECHNICAL_FEES` \| `REPRESENTATIVE_OFFICE_EXPENSES` \| `TAX_PAYMENT` \| `TRANSPORTATION_FEES_FOR_GOODS` \| `CONSTRUCTION_COSTS` \| `INSURANCE_PREMIUM` \| `GENERAL_GOODS_TRADES` \| `INSURANCE_CLAIMS_PAYMENT` \| `FAMILY_MAINTENANCE` \| `EDUCATION_EXPENSES` \| `MEDICAL_TREATMENT` \| `DONATIONS` \| `MUTUAL_FUND_INVESTMENT` \| `CURRENCY_EXCHANGE` \| `USER_WITHDRAWAL` \| `ADVANCE_PAYMENTS_FOR_GOODS` \| `VENDOR_CONTRACTOR_SOFTWARE_PAYOUTS` \| `MERCHANT_SETTLEMENT` \| `REPATRIATION_FUND_SETTLEMENT` \| `PERSONAL_REMITTANCE` \| `RETURN_OF_FUNDS` | No | Purpose of the transfer (e.g. 'SALARY'). Required on some corridors |
-| `fundingSource` | `fund_transfer` \| `prefund_balance` | No | fund_transfer (default) returns deposit instructions for the customer; prefund_balance pays from your organisation's balance and starts immediately. Check get_balance first: transfers_enabled must be true and the quote's source asset must be held on its network |
+| `fundingSource` | `fund_transfer` \| `prefund_balance` | No | fund_transfer (default) creates the transfer and returns deposit instructions; nothing moves until a person deposits the funds. prefund_balance debits your organisation's balance and starts the payout immediately, so it needs explicit human approval. Check get_balance first: transfers_enabled must be true and the quote's source asset must be held on its network |
 | `metadata` | object | No | Optional metadata |
 
 #### get_transfer
