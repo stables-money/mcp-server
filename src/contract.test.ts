@@ -152,7 +152,9 @@ function matchOperation(spec: Json, method: string, pathname: string): Operation
 function narrow(schema: Json, data: unknown, root: Json): Json {
   if (!data || typeof data !== "object" || Array.isArray(data)) return schema;
   const value = data as Json;
-  const union = schema.oneOf ?? schema.anyOf;
+  // A union can sit behind a $ref (the spec names CreateTransferDestination).
+  const target = schema.$ref ? deref(schema, root) : schema;
+  const union = target.oneOf ?? target.anyOf;
   if (union) {
     for (const prop of [schema.discriminator?.propertyName, "type", "customer_type"].filter(
       Boolean
@@ -165,7 +167,7 @@ function narrow(schema: Json, data: unknown, root: Json): Json {
     }
     return schema;
   }
-  const resolved = schema.$ref ? deref(schema, root) : schema;
+  const resolved = target;
   if (!resolved.properties) return schema;
   const properties: Json = {};
   for (const [key, sub] of Object.entries<Json>(resolved.properties)) {
