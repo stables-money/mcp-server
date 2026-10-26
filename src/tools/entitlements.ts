@@ -102,7 +102,7 @@ Create payment routes on an entitlement only once its phase is 'ready' (check wi
       customerId: z.string().describe("The customer ID"),
       entitlement: z.string().describe("The entitlement name, e.g. 'aed_local'"),
       requirements: z
-        .record(z.unknown())
+        .record(z.string(), z.unknown())
         .describe("The missing fields, snake_case as in the Update Customer reference"),
     },
     async ({ customerId, entitlement, requirements }) => {

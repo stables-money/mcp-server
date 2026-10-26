@@ -178,7 +178,7 @@ export function registerComplianceTools(server: McpServer, client: StablesApiCli
       rfiId: z.string().describe("The RFI ID"),
       requirementId: z.string().describe("The requirement ID (type 'evidence')"),
       answers: z
-        .record(z.unknown())
+        .record(z.string(), z.unknown())
         .describe(
           "Answers keyed by the form's field keys and document wire_field names, e.g. { funds_origin, funds_origin_explanation, supporting_documents: ['data:application/pdf;base64,...'] }"
         ),
