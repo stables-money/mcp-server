@@ -4,6 +4,7 @@ import {
   StablesApiError,
   apiUrlForKey,
   createStablesClient,
+  signGatewayRequest,
 } from "./stables-client.js";
 
 // Helper to create a mock Response
@@ -554,5 +555,34 @@ describe("StablesApiClient", () => {
       expect(url).toContain("/api/v1/webhooks/deliveries");
       expect(url).toContain("status=FAILED");
     });
+  });
+});
+
+describe("signGatewayRequest", () => {
+  // The gateway authoriser (api-lambda-authoriser-svc) verifies with node:crypto;
+  // this recomputes the same v2 payload independently so the two stay in step.
+  it("produces the v2 signature the gateway authoriser expects", async () => {
+    const { createHash, createHmac } = await import("node:crypto");
+    const authorization = "Bearer sti_test_abc";
+    const keyHash = createHash("sha256").update(authorization).digest("hex");
+    const expected = createHmac("sha256", "s3cret")
+      .update(`1700000000.GET./api/v1/customers.page_size=5.${keyHash}`)
+      .digest("hex");
+    await expect(
+      signGatewayRequest(
+        "s3cret",
+        "get",
+        "/api/v1/customers",
+        "page_size=5",
+        authorization,
+        1700000000
+      )
+    ).resolves.toBe(`t=1700000000,v2=${expected}`);
+  });
+
+  it("changes with the API key", async () => {
+    const a = await signGatewayRequest("s", "GET", "/a", "", "Bearer sti_test_a", 1);
+    const b = await signGatewayRequest("s", "GET", "/a", "", "Bearer sti_test_b", 1);
+    expect(a).not.toBe(b);
   });
 });

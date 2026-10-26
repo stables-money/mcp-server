@@ -827,11 +827,17 @@ const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
  */
 export const GATEWAY_SIGNATURE_HEADER = "X-Stables-Mcp-Signature";
 
-/** `t=<unix seconds>,v1=<hex HMAC-SHA256(secret, "<t>.<METHOD>.<path>")>` */
+/**
+ * `t=<unix seconds>,v2=<hex HMAC-SHA256(secret, "<t>.<METHOD>.<path>.<query>.<sha256hex(authorization)>")>`.
+ * Binding the query string and the Authorization header means a captured
+ * signature only works for that request and that API key.
+ */
 export async function signGatewayRequest(
   secret: string,
   method: string,
   path: string,
+  query: string,
+  authorization: string,
   timestampSeconds = Math.floor(Date.now() / 1000)
 ): Promise<string> {
   const encoder = new TextEncoder();
@@ -842,12 +848,14 @@ export async function signGatewayRequest(
     false,
     ["sign"]
   );
-  const payload = `${timestampSeconds}.${method.toUpperCase()}.${path}`;
+  const keyHash = toHex(await crypto.subtle.digest("SHA-256", encoder.encode(authorization)));
+  const payload = `${timestampSeconds}.${method.toUpperCase()}.${path}.${query}.${keyHash}`;
   const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
-  const hex = Array.from(new Uint8Array(signature), (b) => b.toString(16).padStart(2, "0")).join(
-    ""
-  );
-  return `t=${timestampSeconds},v1=${hex}`;
+  return `t=${timestampSeconds},v2=${toHex(signature)}`;
+}
+
+function toHex(buffer: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buffer), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export interface StablesApiClientOptions {
@@ -878,10 +886,13 @@ export class StablesApiClient {
     };
 
     if (this.options.gatewaySigningSecret) {
+      const target = new URL(url);
       headers[GATEWAY_SIGNATURE_HEADER] = await signGatewayRequest(
         this.options.gatewaySigningSecret,
         options.method ?? "GET",
-        new URL(url).pathname
+        target.pathname,
+        target.search.replace(/^\?/, ""),
+        headers.Authorization
       );
     }
 
