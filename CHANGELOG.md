@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.8] - 2026-10-26
+
+### Added
+- Saved beneficiary tools: `list_beneficiaries` and `get_beneficiary` (read),
+  `create_beneficiary` and `archive_beneficiary` (write, so a read-only OAuth
+  connection cannot call them), mirroring the new Beneficiaries API reference.
+
 ## [2.6.7] - 2026-10-26
 
 ### Added

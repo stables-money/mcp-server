@@ -54,6 +54,12 @@ export const TOOL_POLICY: Record<string, ToolPolicy> = {
   get_transfer: read("Get transfer"),
   list_transfers: read("List transfers"),
 
+  // Saved beneficiaries
+  list_beneficiaries: read("List saved beneficiaries"),
+  get_beneficiary: read("Get saved beneficiary"),
+  create_beneficiary: write("Save beneficiary", { idempotent: true }),
+  archive_beneficiary: write("Archive saved beneficiary", { idempotent: true }),
+
   // Payment routes (virtual accounts)
   create_virtual_account: write("Create payment route"),
   list_virtual_accounts: read("List payment routes"),

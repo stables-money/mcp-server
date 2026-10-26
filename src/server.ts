@@ -11,6 +11,7 @@ import { FULL_ACCESS, TOOL_POLICY, allows, annotationsFor, type ToolGrant } from
 import { registerCustomerTools } from "./tools/customers.js";
 import { registerQuoteTools } from "./tools/quotes.js";
 import { registerTransferTools } from "./tools/transfers.js";
+import { registerBeneficiaryTools } from "./tools/beneficiaries.js";
 import { registerVirtualAccountTools } from "./tools/virtual-accounts.js";
 import { registerApiKeyTools } from "./tools/api-keys.js";
 import { registerWebhookTools } from "./tools/webhooks.js";
@@ -61,6 +62,7 @@ export function createStablesMcpServer(
   registerCustomerTools(server, client);
   registerQuoteTools(server, client);
   registerTransferTools(server, client);
+  registerBeneficiaryTools(server, client);
   registerVirtualAccountTools(server, client);
   registerApiKeyTools(server, client);
   registerWebhookTools(server, client);
