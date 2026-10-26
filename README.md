@@ -10,7 +10,7 @@ MCP (Model Context Protocol) is an open standard that provides a standardized wa
 
 ## Features
 
-This MCP server provides 51 tools across 11 categories, one for every operation documented on [docs.stables.money](https://docs.stables.money) (a contract test checks this, see below):
+This MCP server provides 55 tools across 12 categories, one for every operation documented on [docs.stables.money](https://docs.stables.money)(a contract test checks this, see below):
 
 ### Customer Management
 - `create_customer` - Create individual or business customers
@@ -49,6 +49,12 @@ This MCP server provides 51 tools across 11 categories, one for every operation 
 - `create_transfer` - Execute a transfer using an active quote, paid by deposit or from your balance
 - `get_transfer` - Check transfer status
 - `list_transfers` - List transfers with filters
+
+### Saved Beneficiaries
+- `list_beneficiaries` - Saved recipients and bank accounts, to pay by id with `create_transfer`
+- `get_beneficiary` - One beneficiary's details and whether it still passes today's payout rules
+- `create_beneficiary` - Save a recipient and bank account (validated like a transfer)
+- `archive_beneficiary` - Archive a beneficiary so it can no longer be paid
 
 ### Virtual Accounts
 - `create_virtual_account` - Create virtual bank accounts for fiat deposits
@@ -330,6 +336,7 @@ stables-mcp-server/
 │       ├── documents.ts      # Transfer and deposit document tools (4)
 │       ├── quotes.ts         # Quote tools (2)
 │       ├── transfers.ts      # Transfer tools (4)
+│       ├── beneficiaries.ts  # Saved beneficiary tools (4)
 │       ├── virtual-accounts.ts # Payment route tools (9)
 │       ├── balances.ts       # Balance tools (6)
 │       ├── api-keys.ts       # API key tools (4)

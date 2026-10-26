@@ -357,6 +357,33 @@ export interface BeneficiaryTransferDestination {
   beneficiary_id: string;
 }
 
+/** A recipient and bank account saved once and paid later by id. */
+export interface Beneficiary {
+  id: string;
+  /** Organisation-chosen display name. */
+  label: string | null;
+  status: "active" | "archived";
+  network: "bank" | "swift" | "payid";
+  destination: Omit<BankTransferDestination, "pay_id" | "pay_id_type"> & { phone?: string };
+  /** Whether the saved details still pass today's payout rules. */
+  validation: ValidatePaymentMethodResponse;
+  last_used_at: string | null;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+export interface CreateBeneficiaryRequest {
+  network: "bank" | "swift";
+  label?: string;
+  destination: BankTransferDestination;
+}
+
+export interface ListBeneficiariesResponse {
+  beneficiaries: Beneficiary[];
+  page: { next_page_token: string; total: number };
+}
+
 export type TransferDestination =
   | BankTransferDestination
   | CryptoTransferDestination
@@ -1140,6 +1167,50 @@ export class StablesApiClient {
     return this.requestWithRetry<Transfer>("/api/v1/transfer", {
       method: "POST",
       body: JSON.stringify(data),
+      headers: { "idempotency-key": this.generateIdempotencyKey() },
+    });
+  }
+
+  // ============ BENEFICIARIES ============
+
+  async listBeneficiaries(params?: {
+    currency?: string;
+    network?: string;
+    status?: string;
+    search?: string;
+    pageSize?: number;
+    pageToken?: string;
+  }): Promise<ListBeneficiariesResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.currency) searchParams.set("currency", params.currency);
+    if (params?.network) searchParams.set("network", params.network);
+    if (params?.status) searchParams.set("status", params.status);
+    if (params?.search) searchParams.set("search", params.search);
+    if (params?.pageSize) searchParams.set("page_size", params.pageSize.toString());
+    if (params?.pageToken) searchParams.set("page_token", params.pageToken);
+
+    const query = searchParams.toString();
+    return this.requestWithRetry<ListBeneficiariesResponse>(
+      `/api/v1/beneficiaries${query ? `?${query}` : ""}`
+    );
+  }
+
+  async getBeneficiary(beneficiaryId: string): Promise<Beneficiary> {
+    return this.requestWithRetry<Beneficiary>(`/api/v1/beneficiaries/${beneficiaryId}`);
+  }
+
+  async createBeneficiary(data: CreateBeneficiaryRequest): Promise<Beneficiary> {
+    return this.requestWithRetry<Beneficiary>("/api/v1/beneficiaries", {
+      method: "POST",
+      body: JSON.stringify(data),
+      headers: { "idempotency-key": this.generateIdempotencyKey() },
+    });
+  }
+
+  /** Archives rather than deletes: past transfers keep it, and saving it again revives it. */
+  async archiveBeneficiary(beneficiaryId: string): Promise<Beneficiary> {
+    return this.requestWithRetry<Beneficiary>(`/api/v1/beneficiaries/${beneficiaryId}`, {
+      method: "DELETE",
       headers: { "idempotency-key": this.generateIdempotencyKey() },
     });
   }

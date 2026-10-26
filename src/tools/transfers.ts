@@ -96,8 +96,8 @@ const PURPOSE_CODES = [
   "RETURN_OF_FUNDS",
 ] as const;
 
-/** Bank payout fields, shared by create_transfer and validate_payment_method. */
-const bankDestinationShape = {
+/** Bank payout fields, shared by create_transfer, validate_payment_method and create_beneficiary. */
+export const bankDestinationShape = {
   accountHolderName: z
     .string()
     .optional()
@@ -149,7 +149,7 @@ const bankDestinationShape = {
 
 type BankDestinationInput = Partial<z.infer<z.ZodObject<typeof bankDestinationShape>>>;
 
-function buildBankDestination(input: BankDestinationInput): BankTransferDestination {
+export function buildBankDestination(input: BankDestinationInput): BankTransferDestination {
   if (!input.accountHolderName || !input.bankName || !input.bankCountry || !input.bankCurrency) {
     throw new Error(
       "A bank destination needs accountHolderName, bankName, bankCountry and bankCurrency"
