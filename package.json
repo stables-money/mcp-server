@@ -1,6 +1,6 @@
 {
   "name": "stables-mcp-server",
-  "version": "2.6.8",
+  "version": "2.6.9",
   "mcpName": "money.stables/mcp",
   "description": "MCP server for the Stables fiat-to-crypto API, hosted at mcp.stables.money or run locally - enables AI agents to manage customers, quotes, transfers and payment routes",
   "type": "module",
@@ -72,7 +72,7 @@
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^1.2.3",
     "@modelcontextprotocol/sdk": "^1.26.0",
-    "zod": "^3.23.8"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -89,6 +89,6 @@
     "wrangler": "^4.145.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   }
 }

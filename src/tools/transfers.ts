@@ -247,7 +247,7 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
         .describe(
           "fund_transfer (default) returns deposit instructions for the customer; prefund_balance pays from your organisation's balance and starts immediately. Check get_balance first: transfers_enabled must be true and the quote's source asset must be held on its network"
         ),
-      metadata: z.record(z.string()).optional().describe("Optional metadata"),
+      metadata: z.record(z.string(), z.string()).optional().describe("Optional metadata"),
     },
     async (input) => {
       try {

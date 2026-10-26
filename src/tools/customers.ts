@@ -654,7 +654,7 @@ Updated: ${customer.updated_at}`,
     "Update customer metadata key-value pairs",
     {
       customerId: z.string().describe("The customer ID to update metadata for"),
-      metadata: z.record(z.string()).describe("Metadata key-value pairs to set"),
+      metadata: z.record(z.string(), z.string()).describe("Metadata key-value pairs to set"),
     },
     async ({ customerId, metadata }) => {
       try {

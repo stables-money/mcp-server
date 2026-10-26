@@ -15,7 +15,10 @@ export function registerApiKeyTools(server: McpServer, client: StablesApiClient)
       name: z
         .string()
         .describe("A descriptive name for this API key (e.g., 'Production Bot', 'Agent Smith')"),
-      metadata: z.record(z.string()).optional().describe("Optional metadata to attach to the key"),
+      metadata: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe("Optional metadata to attach to the key"),
     },
     async ({ name, metadata }) => {
       try {
