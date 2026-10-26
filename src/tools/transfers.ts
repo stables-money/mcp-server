@@ -203,7 +203,9 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
   // Create Transfer
   server.tool(
     "create_transfer",
-    "Execute a transfer using an active quote. The quote must not be expired. This initiates real money movement, so get explicit human approval first. " +
+    "Create a transfer from an active quote. The quote must not be expired. " +
+      "With fundingSource fund_transfer (the default) this only creates the transfer and returns deposit instructions; no money moves until someone deposits the funds. " +
+      "With prefund_balance it debits your organisation's balance and starts the payout immediately, so this moves real money: get explicit human approval first. " +
       `For payouts in ${ENHANCED_BENEFICIARY_CURRENCIES} you must also supply recipientType, the full beneficiary address, and dateOfBirth when the recipient is an individual. ` +
       "To pay one of the organisation's saved beneficiaries, set destinationType to beneficiary and pass its beneficiaryId instead of bank details.",
     {
@@ -245,7 +247,7 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
         .enum(["fund_transfer", "prefund_balance"])
         .optional()
         .describe(
-          "fund_transfer (default) returns deposit instructions for the customer; prefund_balance pays from your organisation's balance and starts immediately. Check get_balance first: transfers_enabled must be true and the quote's source asset must be held on its network"
+          "fund_transfer (default) creates the transfer and returns deposit instructions; nothing moves until a person deposits the funds. prefund_balance debits your organisation's balance and starts the payout immediately, so it needs explicit human approval. Check get_balance first: transfers_enabled must be true and the quote's source asset must be held on its network"
         ),
       metadata: z.record(z.string(), z.string()).optional().describe("Optional metadata"),
     },
