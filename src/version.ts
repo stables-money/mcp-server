@@ -1,2 +1,2 @@
 // Generated from package.json by scripts/write-version.mjs. Do not edit.
-export const SERVER_VERSION = "2.6.10";
+export const SERVER_VERSION = "2.6.11";

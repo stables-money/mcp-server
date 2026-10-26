@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.6.11] - 2026-10-26
+
+### Changed
+- `create_transfer` says which funding mode moves money. `fund_transfer` (the
+  default) only creates the transfer and returns deposit instructions; nothing
+  moves until someone deposits. `prefund_balance` debits the organisation
+  balance and pays out at once, and is the mode that needs explicit human
+  approval. Wording only.
+
 ## [2.6.8] - 2026-10-26
 
 ### Added
