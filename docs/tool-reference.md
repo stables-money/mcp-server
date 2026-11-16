@@ -702,16 +702,16 @@ _No parameters._
 
 #### simulate_route_deposit
 
-SANDBOX ONLY. Simulate a fiat deposit into a payment route so you can watch the conversion and payout complete without a real bank transfer. Fails on production.
+SANDBOX ONLY. Simulate a deposit into a payment route so you can watch the conversion and payout complete without real money: a fiat deposit for an on-ramp or fiat-to-fiat route, or the route's USDT/USDC arriving on its address for an off-ramp (crypto_to_fiat) route. Fails on production.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID |
 | `virtualAccountId` | string | Yes | The payment route (virtual account) ID |
-| `amount` | string | Yes | Deposit amount in major units (e.g. '500.00') |
-| `scenario` | `create_only` \| `completed` \| `failed` | No | 'completed' runs the deposit through to payout, 'failed' exercises the failure path, 'create_only' stops at the deposit |
-| `senderName` | string | No | Name to attribute the deposit to |
-| `senderReference` | string | No | Payment reference on the deposit |
+| `amount` | string | Yes | Deposit amount in major units of the route's source currency (e.g. '500.00') |
+| `scenario` | `create_only` \| `completed` \| `failed` | No | 'completed' runs the deposit through to payout, 'failed' exercises the failure path, 'create_only' stops at the deposit. Off-ramp routes take 'completed' only |
+| `senderName` | string | No | Name to attribute the deposit to (fiat routes) |
+| `senderReference` | string | No | Payment reference on the deposit; for an off-ramp route, the sending wallet address |
 | `externalDepositId` | string | No | Your own reference for this deposit |
 
 #### simulate_transfer_deposit
