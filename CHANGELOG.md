@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.6.12] - 2026-11-16
+
+### Added
+- `create_virtual_account` opens a SWIFT collection account with
+  `sourcePaymentRail: "swift"`: an IBAN that receives international SWIFT
+  transfers in 18 currencies and settles in USDT on Tron. For business
+  customers whose verification is approved and who hold `base_pay_in`.
+- `base_pay_in` in the entitlements offered by `create_customer`,
+  `update_customer` and `request_entitlements`.
+- Developer fee tools: `get_developer_fee` (read), `set_developer_fee` and
+  `remove_developer_fee` (write, so a read-only OAuth connection cannot call
+  them).
+- `simulate_balance_deposit` (sandbox): credit the balance with a simulated
+  stablecoin deposit.
+
+### Fixed
+- The contract check against the live docs failed since 2026-11-14 because
+  four documented operations had no tool; it also now judges `anyOf` fields
+  (a patterned string or null) by their closest branch, as it does `oneOf`.
+
 ## [2.6.11] - 2026-10-26
 
 ### Changed
