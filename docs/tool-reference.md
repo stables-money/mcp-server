@@ -36,7 +36,7 @@ Create a new customer in Stables for KYC verification and transfers. Use 'indivi
 | `acceptTerms` | boolean | No | Accept Stables' terms of service and privacy policy |
 | `externalCustomerId` | string | No | Your own reference ID for this customer |
 | `phone` | string | No | Phone number with country code (e.g., '+14155552671') |
-| `entitlements` | array of `base_payout` \| `virtual_account` \| `eur_virtual_account` \| `gbp_virtual_account` \| `usd_virtual_account` \| `aed_local` | No | List of entitlements to request |
+| `entitlements` | array of `base_payout` \| `base_pay_in` \| `virtual_account` \| `eur_virtual_account` \| `gbp_virtual_account` \| `usd_virtual_account` \| `aed_local` | No | List of entitlements to request |
 | `addressLine1` | string | No | Street address line 1 |
 | `addressLine2` | string | No | Street address line 2 |
 | `addressCity` | string | No | City |
@@ -86,7 +86,7 @@ Create a customer and get a hosted verification link for them in one call, so th
 | `acceptTerms` | boolean | No | Accept Stables' terms of service and privacy policy |
 | `externalCustomerId` | string | No | Your own reference ID for this customer |
 | `phone` | string | No | Phone number with country code (e.g., '+14155552671') |
-| `entitlements` | array of `base_payout` \| `virtual_account` \| `eur_virtual_account` \| `gbp_virtual_account` \| `usd_virtual_account` \| `aed_local` | No | List of entitlements to request |
+| `entitlements` | array of `base_payout` \| `base_pay_in` \| `virtual_account` \| `eur_virtual_account` \| `gbp_virtual_account` \| `usd_virtual_account` \| `aed_local` | No | List of entitlements to request |
 | `addressLine1` | string | No | Street address line 1 |
 | `addressLine2` | string | No | Street address line 2 |
 | `addressCity` | string | No | City |
@@ -149,7 +149,7 @@ Update customer details, entitlements, or verification information
 | `dob` | string | No | Updated date of birth (YYYY-MM-DD) |
 | `nationality` | string | No | Updated nationality (two-letter country code) |
 | `companyName` | string | No | Updated company name (for businesses) |
-| `entitlements` | array of `base_payout` \| `virtual_account` \| `eur_virtual_account` \| `gbp_virtual_account` \| `usd_virtual_account` \| `aed_local` | No | Updated entitlements |
+| `entitlements` | array of `base_payout` \| `base_pay_in` \| `virtual_account` \| `eur_virtual_account` \| `gbp_virtual_account` \| `usd_virtual_account` \| `aed_local` | No | Updated entitlements |
 
 #### update_customer_metadata
 
@@ -177,7 +177,7 @@ Apply for one or more entitlements for an existing customer, e.g. to add a payme
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID |
-| `entitlements` | array of `base_payout` \| `virtual_account` \| `eur_virtual_account` \| `gbp_virtual_account` \| `usd_virtual_account` \| `aed_local` | Yes | Entitlement names, e.g. ['aed_local'] |
+| `entitlements` | array of `base_payout` \| `base_pay_in` \| `virtual_account` \| `eur_virtual_account` \| `gbp_virtual_account` \| `usd_virtual_account` \| `aed_local` | Yes | Entitlement names, e.g. ['aed_local'] |
 
 #### submit_entitlement_requirements
 
@@ -382,12 +382,13 @@ Archive a saved beneficiary. It leaves active listings and is refused as a trans
 
 #### create_virtual_account
 
-Create a payment route (virtual bank account) so a customer can receive fiat deposits that convert to a stablecoin and pay out to a wallet. The payout destination is mandatory: the API refuses a fiat-to-crypto route without one. Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_virtual_account.
+Create a payment route (virtual bank account) so a customer can receive fiat deposits that convert to a stablecoin and pay out to a wallet. The payout destination is mandatory: the API refuses a fiat-to-crypto route without one. Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_virtual_account. Set sourcePaymentRail to 'swift' for a SWIFT collection account: an IBAN that receives international SWIFT transfers, for business customers whose verification is approved and who hold the base_pay_in entitlement. It is not in the customer's name, and settles in USDT on Tron.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID to create the payment route for |
 | `sourceCurrency` | string | Yes | Fiat currency the route collects in (e.g. 'AUD', 'USD', 'EUR') |
+| `sourcePaymentRail` | `swift` | No | Omit for the currency's local rail. 'swift' opens a SWIFT collection account (business customers with approved verification and base_pay_in). SWIFT currencies: AED, AUD, CAD, CHF, CZK, DKK, EUR, GBP, GEL, HKD, HUF, JPY, NZD, PLN, SEK, SGD, THB, USD; payout USDT on tron |
 | `destinationAddress` | string | Yes | Wallet address deposits are paid out to. Validated against the chosen network |
 | `destinationPaymentRail` | `arbitrum` \| `avalanche_c_chain` \| `base` \| `celo` \| `ethereum` \| `optimism` \| `polygon` \| `solana` \| `stellar` \| `tron` | Yes | Blockchain network the payout address belongs to |
 | `destinationCurrency` | `usdc` \| `usdt` \| `dai` \| `pyusd` \| `eurc` | No | Stablecoin to receive. Default: `"usdt"`. |

@@ -38,9 +38,10 @@ export interface VerificationLevelResponse {
   details?: unknown[];
 }
 
-/** The five feature entitlements the API accepts. */
+/** The feature entitlements the API accepts. */
 export const ENTITLEMENT_IDS = [
   "base_payout",
+  "base_pay_in",
   "virtual_account",
   "eur_virtual_account",
   "gbp_virtual_account",
@@ -495,7 +496,8 @@ export interface VirtualAccount {
  * ignored. Change it afterwards with updateVirtualAccount.
  */
 export interface CreateVirtualAccountRequest {
-  source: { currency: string };
+  /** `payment_rail: "swift"` opens a SWIFT collection account (business customers only). */
+  source: { currency: string; payment_rail?: "swift" };
   /** Required for fiat_to_crypto, which is the default. */
   destination?: VirtualAccountDestination;
   workflow_type?: "fiat_to_crypto" | "fiat_to_fiat";
