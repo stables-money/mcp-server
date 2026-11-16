@@ -492,6 +492,8 @@ export type VirtualAccountWorkflowType = "fiat_to_crypto" | "fiat_to_fiat" | "cr
 export interface VirtualAccount {
   id: string;
   status: VirtualAccountStatus;
+  /** Why a deactivated route is off: TENANT_REQUEST, CUSTOMER_REQUEST or NONPAYMENT. */
+  deactivation_reason?: string | null;
   customer_id: string;
   developer_fee_percent?: string;
   created_at: string;
@@ -1333,6 +1335,24 @@ export class StablesApiClient {
   }
 
   /** Replace the payout wallet on an existing payment route. */
+  /**
+   * Turn a payment route off (it stops accepting new deposits) or back on. A route Stables
+   * deactivated can only be reactivated by Stables support.
+   */
+  async setVirtualAccountStatus(
+    customerId: string,
+    virtualAccountId: string,
+    status: "activated" | "deactivated"
+  ): Promise<VirtualAccount> {
+    return this.requestWithRetry<VirtualAccount>(
+      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/status`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ status }),
+      }
+    );
+  }
+
   async updateVirtualAccountDestination(
     customerId: string,
     virtualAccountId: string,

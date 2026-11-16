@@ -11,6 +11,8 @@
   `get_virtual_account_history`, never as transfers.
 - `get_virtual_account` (read-only): one payment route with its deposit
   instructions, including an off-ramp route's deposit address.
+- `set_virtual_account_status` (write): turn a payment route off so it stops
+  accepting new deposits, or back on (`PUT .../virtual-accounts/{id}/status`).
 - `simulate_route_deposit` (sandbox) covers off-ramp routes: the route's
   USDT or USDC arrives on its address and pays out to its bank account.
   Completed only; `senderReference` is the sending wallet.

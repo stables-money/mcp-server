@@ -559,6 +559,49 @@ Status: ${account.status}`,
     }
   );
 
+  // Turn a Virtual Account off or on
+  server.tool(
+    "set_virtual_account_status",
+    "Deactivate a payment route so it stops accepting new deposits, or reactivate it. " +
+      "You can reactivate only a route your organization deactivated (deactivation_reason TENANT_REQUEST); " +
+      "a route Stables deactivated can only be reactivated by Stables support. " +
+      "Reactivating may charge the current month's account fee from the prefund balance if it has not been paid.",
+    {
+      customerId: z.string().describe("The customer ID"),
+      virtualAccountId: z.string().describe("The payment route (virtual account) ID"),
+      status: z
+        .enum(["deactivated", "activated"])
+        .describe("'deactivated' to switch the route off, 'activated' to switch it back on"),
+    },
+    async ({ customerId, virtualAccountId, status }) => {
+      try {
+        const account = await client.setVirtualAccountStatus(customerId, virtualAccountId, status);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Payment route ${account.id} is now ${account.status}.${
+                account.deactivation_reason
+                  ? `\nDeactivation reason: ${account.deactivation_reason}`
+                  : ""
+              }`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to change the payment route's status: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
   // Get Virtual Account History
   server.tool(
     "get_virtual_account_history",

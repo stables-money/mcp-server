@@ -59,6 +59,33 @@ describe("payment route tools", () => {
   const sentBody = () => JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
   const text = (result: unknown) => JSON.stringify((result as { content: unknown }).content);
 
+  it("switches a route off with PUT .../status", async () => {
+    fetchSpy.mockImplementationOnce(
+      async () =>
+        new Response(
+          JSON.stringify({
+            ...offrampRoute,
+            status: "deactivated",
+            deactivation_reason: "TENANT_REQUEST",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    );
+
+    const result = await client.callTool({
+      name: "set_virtual_account_status",
+      arguments: { customerId: "cus_1", virtualAccountId: ROUTE_ID, status: "deactivated" },
+    });
+
+    expect(fetchSpy.mock.calls[0][0]).toBe(
+      `https://api.test.stables.money/api/v1/customers/cus_1/virtual-accounts/${ROUTE_ID}/status`
+    );
+    expect((fetchSpy.mock.calls[0][1] as RequestInit).method).toBe("PUT");
+    expect(sentBody()).toEqual({ status: "deactivated" });
+    expect(text(result)).toContain("is now deactivated");
+    expect(text(result)).toContain("TENANT_REQUEST");
+  });
+
   it("creates an off-ramp route paying a saved beneficiary", async () => {
     const result = await client.callTool({
       name: "create_virtual_account",
