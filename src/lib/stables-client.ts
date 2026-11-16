@@ -479,15 +479,28 @@ export interface VirtualAccountDepositInstructions {
   account_holder_name?: string;
 }
 
+/** A crypto_to_fiat (off-ramp) route's permanent deposit address. */
+export interface CryptoDepositInstructions {
+  type: "crypto";
+  wallet_address: string;
+  currency: string;
+  network: string;
+}
+
+export type VirtualAccountWorkflowType = "fiat_to_crypto" | "fiat_to_fiat" | "crypto_to_fiat";
+
 export interface VirtualAccount {
   id: string;
   status: VirtualAccountStatus;
   customer_id: string;
   developer_fee_percent?: string;
   created_at: string;
-  source_deposit_instructions: VirtualAccountDepositInstructions;
+  source_deposit_instructions: VirtualAccountDepositInstructions | CryptoDepositInstructions;
   deposit_handling_mode: DepositHandlingMode;
+  workflow_type?: VirtualAccountWorkflowType;
   destination: VirtualAccountDestination | null;
+  /** fiat_to_fiat and crypto_to_fiat: the bank account deposits are paid out to. */
+  fiat_destination?: (Partial<BankTransferDestination> & { network?: string }) | null;
   held_balance: { amount: string; currency: string } | null;
   deposit_stats?: {
     total_deposit_count: number;
@@ -502,11 +515,20 @@ export interface VirtualAccount {
  * ignored. Change it afterwards with updateVirtualAccount.
  */
 export interface CreateVirtualAccountRequest {
-  /** `payment_rail: "swift"` opens a SWIFT collection account (business customers only). */
-  source: { currency: string; payment_rail?: "swift" };
+  /**
+   * `payment_rail: "swift"` opens a SWIFT collection account (fiat_to_crypto, business customers
+   * only). `network` is crypto_to_fiat only: the chain the deposit address is issued on.
+   */
+  source: { currency: string; payment_rail?: "swift"; network?: PaymentRail };
   /** Required for fiat_to_crypto, which is the default. */
   destination?: VirtualAccountDestination;
-  workflow_type?: "fiat_to_crypto" | "fiat_to_fiat";
+  workflow_type?: VirtualAccountWorkflowType;
+  /** crypto_to_fiat: the bank account every deposit is paid out to. */
+  fiat_destination?:
+    | { type: "beneficiary"; beneficiary_id: string; network?: string }
+    | (BankTransferDestination & { network?: string });
+  /** crypto_to_fiat only: the purpose every payout carries. */
+  purpose_code?: string;
   metadata?: Record<string, string>;
 }
 
@@ -1110,6 +1132,12 @@ export class StablesApiClient {
         body: JSON.stringify(data),
         headers: { "idempotency-key": this.generateIdempotencyKey() },
       }
+    );
+  }
+
+  async getVirtualAccount(customerId: string, virtualAccountId: string): Promise<VirtualAccount> {
+    return this.requestWithRetry<VirtualAccount>(
+      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}`
     );
   }
 

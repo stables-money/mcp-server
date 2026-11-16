@@ -62,6 +62,7 @@ export const TOOL_POLICY: Record<string, ToolPolicy> = {
 
   // Payment routes (virtual accounts)
   create_virtual_account: write("Create payment route"),
+  get_virtual_account: read("Get payment route"),
   list_virtual_accounts: read("List payment routes"),
   update_virtual_account: write("Update payment route", { idempotent: true }),
   update_route_destination: write("Change payment route destination", { idempotent: true }),

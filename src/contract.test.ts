@@ -44,14 +44,40 @@ const UNDOCUMENTED_ON_PURPOSE: Record<string, string> = {};
  */
 const DOCUMENTED_NOT_EXPOSED: Record<string, string> = {};
 
+const UUID = "11111111-1111-4111-8111-111111111111";
+
 /** Extra inputs for tools whose branches a single generated input cannot reach. */
 const EXTRA_CASES: Record<string, Json[]> = {
   list_virtual_accounts: [{}], // no customerId: the list across every customer
+  // Off-ramp routes: the generated input takes the fiat_to_crypto default.
+  create_virtual_account: [
+    {
+      customerId: UUID,
+      workflowType: "crypto_to_fiat",
+      sourceCurrency: "USDT",
+      sourceNetwork: "ethereum",
+      payoutType: "beneficiary",
+      beneficiaryId: UUID,
+      payoutNetwork: "swift",
+    },
+    {
+      customerId: UUID,
+      workflowType: "crypto_to_fiat",
+      sourceCurrency: "USDT",
+      sourceNetwork: "tron",
+      accountHolderName: "Somchai Jaidee",
+      accountNumber: "1234567890",
+      bankName: "Example Bank",
+      bankCountry: "TH",
+      bankCurrency: "THB",
+      payoutNetwork: "bank",
+      purposeCode: "PERSONAL_REMITTANCE",
+    },
+  ],
 };
 
 const haveReference =
   existsSync("reference/spec.json") && existsSync("reference/docs-operations.json");
-const UUID = "11111111-1111-4111-8111-111111111111";
 
 // ---------- sample generation ----------
 

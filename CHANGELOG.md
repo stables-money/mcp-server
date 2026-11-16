@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- `create_virtual_account` creates off-ramp routes: set `workflowType` to
+  `crypto_to_fiat`, give the stablecoin (`USDT` or `USDC`) and `sourceNetwork`,
+  and pay out to a saved beneficiary (`payoutType: beneficiary`) or to bank
+  details. Optional `payoutNetwork` and `purposeCode`. A SWIFT code is needed
+  only when `payoutNetwork` is `swift`. Route deposits are read with
+  `get_virtual_account_history`, never as transfers.
+- `get_virtual_account` (read-only): one payment route with its deposit
+  instructions, including an off-ramp route's deposit address.
+
 ## [2.6.12] - 2026-11-16
 
 ### Added

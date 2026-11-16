@@ -382,16 +382,57 @@ Archive a saved beneficiary. It leaves active listings and is refused as a trans
 
 #### create_virtual_account
 
-Create a payment route (virtual bank account) so a customer can receive fiat deposits that convert to a stablecoin and pay out to a wallet. The payout destination is mandatory: the API refuses a fiat-to-crypto route without one. Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_virtual_account. Set sourcePaymentRail to 'swift' for a SWIFT collection account: an IBAN that receives international SWIFT transfers, for business customers whose verification is approved and who hold the base_pay_in entitlement. It is not in the customer's name, and settles in USDT on Tron.
+Create a payment route for a customer. fiat_to_crypto (the default) issues a virtual bank account: fiat deposits convert to a stablecoin and pay out to a wallet, so destinationAddress and destinationPaymentRail are required. Set sourcePaymentRail to 'swift' for a SWIFT collection account: an IBAN that receives international SWIFT transfers, for business customers whose verification is approved and who hold the base_pay_in entitlement; it is not in the customer's name, and settles in USDT on Tron. crypto_to_fiat (an off-ramp route) issues a permanent USDT or USDC deposit address on sourceNetwork: every deposit converts and pays out to one bank account, given as a saved beneficiary (payoutType beneficiary + beneficiaryId) or as bank details. On a crypto_to_fiat route, swiftCode or bicCode is needed only when payoutNetwork is swift. Its deposits are route transactions, read with get_virtual_account_history, never transfers. Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_virtual_account.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID to create the payment route for |
-| `sourceCurrency` | string | Yes | Fiat currency the route collects in (e.g. 'AUD', 'USD', 'EUR') |
-| `sourcePaymentRail` | `swift` | No | Omit for the currency's local rail. 'swift' opens a SWIFT collection account (business customers with approved verification and base_pay_in). SWIFT currencies: AED, AUD, CAD, CHF, CZK, DKK, EUR, GBP, GEL, HKD, HUF, JPY, NZD, PLN, SEK, SGD, THB, USD; payout USDT on tron |
-| `destinationAddress` | string | Yes | Wallet address deposits are paid out to. Validated against the chosen network |
-| `destinationPaymentRail` | `arbitrum` \| `avalanche_c_chain` \| `base` \| `celo` \| `ethereum` \| `optimism` \| `polygon` \| `solana` \| `stellar` \| `tron` | Yes | Blockchain network the payout address belongs to |
-| `destinationCurrency` | `usdc` \| `usdt` \| `dai` \| `pyusd` \| `eurc` | No | Stablecoin to receive. Default: `"usdt"`. |
+| `workflowType` | `fiat_to_crypto` \| `crypto_to_fiat` | No | fiat_to_crypto: a virtual bank account paying out to a wallet. crypto_to_fiat: a permanent stablecoin address paying out to a bank account. Default: `"fiat_to_crypto"`. |
+| `sourceCurrency` | string | Yes | What the customer deposits: a fiat currency for fiat_to_crypto (e.g. 'AUD', 'USD'), or 'USDT' / 'USDC' for crypto_to_fiat |
+| `sourcePaymentRail` | `swift` | No | fiat_to_crypto only. Omit for the currency's local rail. 'swift' opens a SWIFT collection account (business customers with approved verification and base_pay_in). SWIFT currencies: AED, AUD, CAD, CHF, CZK, DKK, EUR, GBP, GEL, HKD, HUF, JPY, NZD, PLN, SEK, SGD, THB, USD; payout USDT on tron |
+| `sourceNetwork` | `arbitrum` \| `avalanche_c_chain` \| `base` \| `celo` \| `ethereum` \| `optimism` \| `polygon` \| `solana` \| `stellar` \| `tron` | No | crypto_to_fiat only, required: the network the deposit address is issued on |
+| `destinationAddress` | string | No | fiat_to_crypto only, required: wallet address deposits are paid out to. Validated against the chosen network |
+| `destinationPaymentRail` | `arbitrum` \| `avalanche_c_chain` \| `base` \| `celo` \| `ethereum` \| `optimism` \| `polygon` \| `solana` \| `stellar` \| `tron` | No | fiat_to_crypto only, required: blockchain network the payout address belongs to |
+| `destinationCurrency` | `usdc` \| `usdt` \| `dai` \| `pyusd` \| `eurc` | No | fiat_to_crypto only: stablecoin to receive. Default: `"usdt"`. |
+| `payoutType` | `bank` \| `beneficiary` | No | crypto_to_fiat only: pay out to bank details given here, or to a saved beneficiary. Default: `"bank"`. |
+| `beneficiaryId` | string | No | crypto_to_fiat with payoutType beneficiary: a saved beneficiary id. Its bank details are copied onto the route; archived beneficiaries are refused |
+| `accountHolderName` | string | No | Account holder's full name, or the company name when recipientType is business |
+| `bankName` | string | No | Name of the destination bank |
+| `bankCountry` | string | No | Bank country, ISO 2-letter (e.g. 'AU', 'US') |
+| `bankCurrency` | string | No | Payout currency, ISO 3-letter (e.g. 'EUR') |
+| `recipientType` | `individual` \| `business` | No | Beneficiary type. Required for AED, CAD, EUR, GBP, MXN, USD |
+| `dateOfBirth` | string | No | Beneficiary date of birth, YYYY-MM-DD. Required when recipientType is individual for AED, CAD, EUR, GBP, MXN, USD |
+| `addressStreet` | string | No | Beneficiary street address |
+| `addressCity` | string | No | Beneficiary city |
+| `addressState` | string | No | Beneficiary state or region |
+| `addressPostalCode` | string | No | Beneficiary postal code |
+| `addressCountry` | string | No | Beneficiary country, ISO 2-letter. The complete address is required for AED, CAD, EUR, GBP, MXN, USD |
+| `iban` | string | No | IBAN (EU/international) |
+| `accountNumber` | string | No | Bank account number, if not using IBAN |
+| `accountType` | `savings` \| `checking` \| `payment` | No | Account type. Required for CAD and USD bank payouts |
+| `payId` | string | No | PayID alias (AUD only). Requires payIdType |
+| `payIdType` | `email` \| `phone_number` \| `abn` \| `acn` \| `organisation_id` | No | PayID alias type. Required when payId is given |
+| `swiftCode` | string | No | SWIFT code |
+| `bicCode` | string | No | BIC (EUR/GBP international) |
+| `routingNumber` | string | No | ABA routing number (US) |
+| `sortCode` | string | No | Sort code (UK) |
+| `ifscCode` | string | No | IFSC code (India) |
+| `bsbCode` | string | No | BSB code (Australia) |
+| `bankCode` | string | No | Bank code / institution number (CAD) |
+| `branchCode` | string | No | Branch code / transit number (CAD) |
+| `cnaps` | string | No | CNAPS (China) |
+| `payoutNetwork` | `swift` \| `bank` \| `payid` \| `mobile_money` \| `ach` \| `fedwire` \| `fps` \| `chaps` \| `sepa` \| `sepa_instant` \| `fast` \| `chats` \| `unionpay` | No | crypto_to_fiat only: how each deposit is paid out. Defaults to the saved beneficiary's payment method, else bank (domestic). swift requires swiftCode or bicCode |
+| `purposeCode` | `PAYMENT_FOR_SERVICES` \| `PAYMENT_FOR_SOFTWARE` \| `PAYMENT_FOR_IMPORTED_GOODS` \| `TRAVEL_SERVICES` \| `VENDOR_CONTRACTOR_PAYOUTS` \| `TRANSFER_TO_OWN_ACCOUNT` \| `INVESTMENT_IN_SHARES` \| `PURCHASE_OF_PROPERTY` \| `REPAYMENT_OF_LOANS` \| `SALARY` \| `PAYMENT_OF_PROPERTY_RENTAL` \| `INFORMATION_SERVICE_CHARGES` \| `ADVERTISING_PR_EXPENSES` \| `ROYALTY_FEES` \| `BROKER_COMMITMENT_FEES` \| `ADVISOR_TECHNICAL_FEES` \| `REPRESENTATIVE_OFFICE_EXPENSES` \| `TAX_PAYMENT` \| `TRANSPORTATION_FEES_FOR_GOODS` \| `CONSTRUCTION_COSTS` \| `INSURANCE_PREMIUM` \| `GENERAL_GOODS_TRADES` \| `INSURANCE_CLAIMS_PAYMENT` \| `FAMILY_MAINTENANCE` \| `EDUCATION_EXPENSES` \| `MEDICAL_TREATMENT` \| `DONATIONS` \| `MUTUAL_FUND_INVESTMENT` \| `CURRENCY_EXCHANGE` \| `USER_WITHDRAWAL` \| `ADVANCE_PAYMENTS_FOR_GOODS` \| `VENDOR_CONTRACTOR_SOFTWARE_PAYOUTS` \| `MERCHANT_SETTLEMENT` \| `REPATRIATION_FUND_SETTLEMENT` \| `PERSONAL_REMITTANCE` \| `RETURN_OF_FUNDS` | No | crypto_to_fiat only: the purpose every payout carries. Required where an off-ramp transfer to the same destination requires one |
+| `metadata` | object | No | Optional key-value data returned on the route |
+
+#### get_virtual_account
+
+Get one payment route by ID, including its deposit instructions (bank details, or an off-ramp route's deposit address) and payout destination
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `customerId` | string | Yes | The customer ID |
+| `virtualAccountId` | string | Yes | The payment route (virtual account) ID |
 
 #### list_virtual_accounts
 

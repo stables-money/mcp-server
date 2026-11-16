@@ -5,119 +5,260 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import type {
+  CreateVirtualAccountRequest,
+  CryptoDepositInstructions,
+  VirtualAccount,
+  VirtualAccountDepositInstructions,
+} from "../lib/stables-client.js";
 import { StablesApiClient } from "../lib/stables-client.js";
+import { PURPOSE_CODES, bankDestinationShape, buildBankDestination } from "./transfers.js";
+
+const NETWORKS = [
+  "arbitrum",
+  "avalanche_c_chain",
+  "base",
+  "celo",
+  "ethereum",
+  "optimism",
+  "polygon",
+  "solana",
+  "stellar",
+  "tron",
+] as const;
+
+const PAYOUT_NETWORKS = [
+  "swift",
+  "bank",
+  "payid",
+  "mobile_money",
+  "ach",
+  "fedwire",
+  "fps",
+  "chaps",
+  "sepa",
+  "sepa_instant",
+  "fast",
+  "chats",
+  "unionpay",
+] as const;
+
+function isCryptoInstructions(
+  i: VirtualAccountDepositInstructions | CryptoDepositInstructions
+): i is CryptoDepositInstructions {
+  return (i as CryptoDepositInstructions).type === "crypto";
+}
+
+/** Deposit instructions for either kind of route: bank details, or an off-ramp route's address. */
+function describeDepositInstructions(
+  instructions: VirtualAccountDepositInstructions | CryptoDepositInstructions
+): string {
+  if (isCryptoInstructions(instructions)) {
+    return `Send only ${instructions.currency.toUpperCase()} on ${instructions.network} to:
+Address: ${instructions.wallet_address}`;
+  }
+  let info = `Currency: ${instructions.currency}`;
+  info += `\nPayment Rails: ${instructions.payment_rails.join(", ")}`;
+  if (instructions.bank_name) info += `\nBank: ${instructions.bank_name}`;
+  if (instructions.bank_account_number)
+    info += `\nAccount Number: ${instructions.bank_account_number}`;
+  if (instructions.bank_routing_number)
+    info += `\nRouting Number: ${instructions.bank_routing_number}`;
+  if (instructions.iban) info += `\nIBAN: ${instructions.iban}`;
+  if (instructions.bic) info += `\nBIC: ${instructions.bic}`;
+  if (instructions.account_holder_name)
+    info += `\nAccount Holder: ${instructions.account_holder_name}`;
+  if (instructions.payment_rails.includes("swift"))
+    info += `\nSWIFT collection account: held in a Stables entity's name, not the customer's. Give payers every field above exactly as shown.`;
+  return info;
+}
+
+/** Where deposits are paid out: a wallet (on-ramp route) or a bank account (off-ramp route). */
+function describePayout(account: VirtualAccount): string {
+  if (account.destination) {
+    return `Payout Address: ${account.destination.address}
+Payment Rail: ${account.destination.payment_rail}
+Currency: ${account.destination.currency}`;
+  }
+  const bank = account.fiat_destination;
+  if (bank) {
+    const acct = bank.account_number ?? bank.iban ?? bank.pay_id;
+    return [
+      bank.account_holder_name && `Account Holder: ${bank.account_holder_name}`,
+      bank.bank_name && `Bank: ${bank.bank_name}`,
+      acct && `Account: ${acct}`,
+      bank.currency && `Currency: ${bank.currency}`,
+      bank.bank_country && `Country: ${bank.bank_country}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+  return "No payout destination configured";
+}
+
+function describeVirtualAccount(account: VirtualAccount): string {
+  const balanceInfo = account.held_balance
+    ? `\nHeld Balance: ${account.held_balance.amount} ${account.held_balance.currency}`
+    : "";
+  return `Account ID: ${account.id}
+Status: ${account.status}
+Customer ID: ${account.customer_id}${account.workflow_type ? `\nType: ${account.workflow_type}` : ""}
+Deposit Mode: ${account.deposit_handling_mode}
+
+Deposit Instructions:
+${describeDepositInstructions(account.source_deposit_instructions)}
+
+Payout Destination:
+${describePayout(account)}
+${balanceInfo}
+Created: ${account.created_at}`;
+}
 
 export function registerVirtualAccountTools(server: McpServer, client: StablesApiClient) {
   // Create Virtual Account
   server.tool(
     "create_virtual_account",
-    "Create a payment route (virtual bank account) so a customer can receive fiat deposits that convert to a stablecoin and pay out to a wallet. " +
-      "The payout destination is mandatory: the API refuses a fiat-to-crypto route without one. " +
-      "Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_virtual_account. " +
-      "Set sourcePaymentRail to 'swift' for a SWIFT collection account: an IBAN that receives international SWIFT transfers, " +
-      "for business customers whose verification is approved and who hold the base_pay_in entitlement. " +
-      "It is not in the customer's name, and settles in USDT on Tron.",
+    "Create a payment route for a customer. " +
+      "fiat_to_crypto (the default) issues a virtual bank account: fiat deposits convert to a stablecoin and pay out to a wallet, so destinationAddress and destinationPaymentRail are required. " +
+      "Set sourcePaymentRail to 'swift' for a SWIFT collection account: an IBAN that receives international SWIFT transfers, for business customers whose verification is approved and who hold the base_pay_in entitlement; it is not in the customer's name, and settles in USDT on Tron. " +
+      "crypto_to_fiat (an off-ramp route) issues a permanent USDT or USDC deposit address on sourceNetwork: every deposit converts and pays out to one bank account, given as a saved beneficiary (payoutType beneficiary + beneficiaryId) or as bank details. " +
+      "On a crypto_to_fiat route, swiftCode or bicCode is needed only when payoutNetwork is swift. Its deposits are route transactions, read with get_virtual_account_history, never transfers. " +
+      "Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_virtual_account.",
     {
       customerId: z.string().describe("The customer ID to create the payment route for"),
+      workflowType: z
+        .enum(["fiat_to_crypto", "crypto_to_fiat"])
+        .default("fiat_to_crypto")
+        .describe(
+          "fiat_to_crypto: a virtual bank account paying out to a wallet. crypto_to_fiat: a permanent stablecoin address paying out to a bank account"
+        ),
       sourceCurrency: z
         .string()
-        .describe("Fiat currency the route collects in (e.g. 'AUD', 'USD', 'EUR')"),
+        .describe(
+          "What the customer deposits: a fiat currency for fiat_to_crypto (e.g. 'AUD', 'USD'), or 'USDT' / 'USDC' for crypto_to_fiat"
+        ),
       sourcePaymentRail: z
         .enum(["swift"])
         .optional()
         .describe(
-          "Omit for the currency's local rail. 'swift' opens a SWIFT collection account (business customers with approved verification and base_pay_in). " +
+          "fiat_to_crypto only. Omit for the currency's local rail. 'swift' opens a SWIFT collection account (business customers with approved verification and base_pay_in). " +
             "SWIFT currencies: AED, AUD, CAD, CHF, CZK, DKK, EUR, GBP, GEL, HKD, HUF, JPY, NZD, PLN, SEK, SGD, THB, USD; payout USDT on tron"
         ),
+      sourceNetwork: z
+        .enum(NETWORKS)
+        .optional()
+        .describe("crypto_to_fiat only, required: the network the deposit address is issued on"),
       destinationAddress: z
         .string()
-        .describe("Wallet address deposits are paid out to. Validated against the chosen network"),
+        .optional()
+        .describe(
+          "fiat_to_crypto only, required: wallet address deposits are paid out to. Validated against the chosen network"
+        ),
       destinationPaymentRail: z
-        .enum([
-          "arbitrum",
-          "avalanche_c_chain",
-          "base",
-          "celo",
-          "ethereum",
-          "optimism",
-          "polygon",
-          "solana",
-          "stellar",
-          "tron",
-        ])
-        .describe("Blockchain network the payout address belongs to"),
+        .enum(NETWORKS)
+        .optional()
+        .describe(
+          "fiat_to_crypto only, required: blockchain network the payout address belongs to"
+        ),
       destinationCurrency: z
         .enum(["usdc", "usdt", "dai", "pyusd", "eurc"])
         .default("usdt")
-        .describe("Stablecoin to receive"),
+        .describe("fiat_to_crypto only: stablecoin to receive"),
+      payoutType: z
+        .enum(["bank", "beneficiary"])
+        .default("bank")
+        .describe(
+          "crypto_to_fiat only: pay out to bank details given here, or to a saved beneficiary"
+        ),
+      beneficiaryId: z
+        .string()
+        .optional()
+        .describe(
+          "crypto_to_fiat with payoutType beneficiary: a saved beneficiary id. Its bank details are copied onto the route; archived beneficiaries are refused"
+        ),
+      ...bankDestinationShape,
+      payoutNetwork: z
+        .enum(PAYOUT_NETWORKS)
+        .optional()
+        .describe(
+          "crypto_to_fiat only: how each deposit is paid out. Defaults to the saved beneficiary's payment method, else bank (domestic). swift requires swiftCode or bicCode"
+        ),
+      purposeCode: z
+        .enum(PURPOSE_CODES)
+        .optional()
+        .describe(
+          "crypto_to_fiat only: the purpose every payout carries. Required where an off-ramp transfer to the same destination requires one"
+        ),
+      metadata: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe("Optional key-value data returned on the route"),
     },
-    async ({
-      customerId,
-      sourceCurrency,
-      sourcePaymentRail,
-      destinationAddress,
-      destinationPaymentRail,
-      destinationCurrency,
-    }) => {
+    async (input) => {
       try {
-        // deposit_handling_mode is deliberately absent: it is not part of the
-        // create schema and was silently ignored here. The server sets it, and
-        // update_virtual_account changes it.
-        const request = {
-          source: {
-            currency: sourceCurrency,
-            ...(sourcePaymentRail ? { payment_rail: sourcePaymentRail } : {}),
-          },
-          workflow_type: "fiat_to_crypto" as const,
-          destination: {
-            currency: destinationCurrency,
-            payment_rail: destinationPaymentRail,
-            address: destinationAddress,
-          },
-        };
+        let request: CreateVirtualAccountRequest;
 
-        const account = await client.createVirtualAccount(customerId, request);
+        if (input.workflowType === "crypto_to_fiat") {
+          if (!input.sourceNetwork) {
+            throw new Error("A crypto_to_fiat route needs sourceNetwork");
+          }
+          let fiatDestination: NonNullable<CreateVirtualAccountRequest["fiat_destination"]>;
+          if (input.payoutType === "beneficiary") {
+            if (!input.beneficiaryId) {
+              throw new Error("payoutType beneficiary needs beneficiaryId");
+            }
+            fiatDestination = { type: "beneficiary", beneficiary_id: input.beneficiaryId };
+          } else {
+            if (!input.accountNumber && !input.iban) {
+              throw new Error("Bank details need accountNumber or iban");
+            }
+            if (input.payoutNetwork === "swift" && !input.swiftCode && !input.bicCode) {
+              throw new Error("A swift payout needs swiftCode or bicCode");
+            }
+            fiatDestination = buildBankDestination(input);
+          }
+          if (input.payoutNetwork) fiatDestination.network = input.payoutNetwork;
 
-        const instructions = account.source_deposit_instructions;
-        let depositInfo = `Currency: ${instructions.currency}`;
-        depositInfo += `\nPayment Rails: ${instructions.payment_rails.join(", ")}`;
-        if (instructions.bank_name) depositInfo += `\nBank: ${instructions.bank_name}`;
-        if (instructions.bank_account_number)
-          depositInfo += `\nAccount Number: ${instructions.bank_account_number}`;
-        if (instructions.bank_routing_number)
-          depositInfo += `\nRouting Number: ${instructions.bank_routing_number}`;
-        if (instructions.iban) depositInfo += `\nIBAN: ${instructions.iban}`;
-        if (instructions.bic) depositInfo += `\nBIC: ${instructions.bic}`;
-        if (instructions.account_holder_name)
-          depositInfo += `\nAccount Holder: ${instructions.account_holder_name}`;
-        if (instructions.payment_rails.includes("swift"))
-          depositInfo += `\nSWIFT collection account: held in a Stables entity's name, not the customer's. Give payers every field above exactly as shown.`;
+          request = {
+            source: { currency: input.sourceCurrency.toUpperCase(), network: input.sourceNetwork },
+            workflow_type: "crypto_to_fiat",
+            fiat_destination: fiatDestination,
+            ...(input.purposeCode && { purpose_code: input.purposeCode }),
+            ...(input.metadata && { metadata: input.metadata }),
+          };
+        } else {
+          if (!input.destinationAddress || !input.destinationPaymentRail) {
+            throw new Error(
+              "A fiat_to_crypto route needs destinationAddress and destinationPaymentRail"
+            );
+          }
+          // deposit_handling_mode is deliberately absent: it is not part of the
+          // create schema and was silently ignored here. The server sets it, and
+          // update_virtual_account changes it.
+          request = {
+            source: {
+              currency: input.sourceCurrency,
+              ...(input.sourcePaymentRail ? { payment_rail: input.sourcePaymentRail } : {}),
+            },
+            workflow_type: "fiat_to_crypto",
+            destination: {
+              currency: input.destinationCurrency,
+              payment_rail: input.destinationPaymentRail,
+              address: input.destinationAddress,
+            },
+            ...(input.metadata && { metadata: input.metadata }),
+          };
+        }
 
-        const destInfo = account.destination
-          ? `\nPayout Address: ${account.destination.address}\nPayment Rail: ${account.destination.payment_rail}\nCurrency: ${account.destination.currency}`
-          : "\nNo payout destination configured";
-
-        const balanceInfo = account.held_balance
-          ? `\nHeld Balance: ${account.held_balance.amount} ${account.held_balance.currency}`
-          : "";
+        const account = await client.createVirtualAccount(input.customerId, request);
 
         return {
           content: [
             {
               type: "text",
-              text: `Virtual Account created successfully!
+              text: `Payment route created successfully!
 
-Account ID: ${account.id}
-Status: ${account.status}
-Customer ID: ${account.customer_id}
-Deposit Mode: ${account.deposit_handling_mode}
-
-Deposit Instructions:
-${depositInfo}
-
-Payout Destination:${destInfo}
-${balanceInfo}
-Created: ${account.created_at}
+${describeVirtualAccount(account)}
 
 Share the deposit instructions with the customer to receive funds.`,
             },
@@ -129,6 +270,32 @@ Share the deposit instructions with the customer to receive funds.`,
             {
               type: "text",
               text: `Failed to create virtual account: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Get one Virtual Account
+  server.tool(
+    "get_virtual_account",
+    "Get one payment route by ID, including its deposit instructions (bank details, or an off-ramp route's deposit address) and payout destination",
+    {
+      customerId: z.string().describe("The customer ID"),
+      virtualAccountId: z.string().describe("The payment route (virtual account) ID"),
+    },
+    async ({ customerId, virtualAccountId }) => {
+      try {
+        const account = await client.getVirtualAccount(customerId, virtualAccountId);
+        return { content: [{ type: "text", text: describeVirtualAccount(account) }] };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to get virtual account: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
           isError: true,
@@ -178,11 +345,16 @@ Share the deposit instructions with the customer to receive funds.`,
           .map((a) => {
             const dest = a.destination
               ? `Payout: ${a.destination.address.slice(0, 10)}... (${a.destination.payment_rail})`
-              : "No payout destination";
+              : a.fiat_destination
+                ? `Payout: bank account in ${a.fiat_destination.currency ?? "fiat"}`
+                : "No payout destination";
+            const source = isCryptoInstructions(a.source_deposit_instructions)
+              ? `${a.source_deposit_instructions.currency.toUpperCase()} on ${a.source_deposit_instructions.network}`
+              : a.source_deposit_instructions.currency;
             const balance = a.held_balance
               ? ` | Balance: ${a.held_balance.amount} ${a.held_balance.currency}`
               : "";
-            return `- ${a.id}: ${a.source_deposit_instructions.currency} (${a.status}) - ${dest}${balance}`;
+            return `- ${a.id}: ${source} (${a.status}) - ${dest}${balance}`;
           })
           .join("\n");
 
