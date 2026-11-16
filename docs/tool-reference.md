@@ -634,6 +634,29 @@ List the wallets whitelisted to deposit into and receive withdrawals from your b
 | `pageSize` | integer | No | Results per page (default 20) |
 | `pageToken` | string | No | next_page_token from the previous page |
 
+### Developer fee
+
+#### get_developer_fee
+
+Get your developer fee: what you charge your customers on top of Stables' fees on every routing onramp and offramp, as a percent, a fixed USD amount per transaction, or both.
+
+_No parameters._
+
+#### set_developer_fee
+
+Set or change your developer fee. Fields you omit keep their value; null stops charging that part, but at least one part must remain (use remove_developer_fee to stop it altogether). Applies to transactions quoted after the change.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `percent` | string,null | No | Percent of every routing onramp and offramp, as a decimal string with at most 2 decimals, above 0 and at most 10. Omit to keep the current value; null to stop charging it. |
+| `fixedAmountUsd` | string,null | No | Fixed USD amount per routing onramp and offramp, as a decimal string with at most 2 decimals, above 0 and at most 10. Omit to keep the current value; null to stop charging it. |
+
+#### remove_developer_fee
+
+Stop charging any developer fee on new routing transactions. Transactions already quoted keep their fees.
+
+_No parameters._
+
 ### Sandbox
 
 #### simulate_route_deposit
@@ -657,6 +680,17 @@ SANDBOX ONLY. Simulate the customer sending the crypto an off-ramp transfer is w
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `transferId` | string | Yes | The transfer awaiting funds |
+
+#### simulate_balance_deposit
+
+SANDBOX ONLY. Simulate a stablecoin deposit into your balance wallet on a network. The sender defaults to your first allowed (whitelisted) wallet, so a plain call credits the balance; an unknown sender is held for review, as it would be in production. Fails on production.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `network` | `ethereum` \| `polygon` \| `solana` \| `tron` | Yes | Balance network |
+| `amount` | string | Yes | Amount in major units, e.g. '250' or '250.5' (at most 6 decimals) |
+| `currency` | `USDT` \| `USDC` | No | Stablecoin deposited. Default: `"USDT"`. |
+| `senderAddress` | string | No | On-chain sender. Defaults to your first allowed wallet on the network |
 
 ### API keys
 

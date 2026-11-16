@@ -199,10 +199,11 @@ type AjvError = {
  * Keeps the errors that mean the MCP and the API disagree on shape: unknown or
  * missing fields, wrong types, values outside an enum. Length, pattern and
  * format failures come from the generated sample values, not the MCP, and for
- * a oneOf only the closest branch is reported, not every branch it missed.
+ * a oneOf or anyOf (e.g. a patterned string or null) only the closest branch is
+ * reported, not every branch it missed.
  */
 function structuralErrors(errors: AjvError[]): string[] {
-  const branchOf = (e: AjvError) => e.schemaPath.match(/^(.*\/oneOf)\/(\d+)\//);
+  const branchOf = (e: AjvError) => e.schemaPath.match(/^(.*\/(?:oneOf|anyOf))\/(\d+)\//);
   const counts = new Map<string, Map<string, number>>();
   for (const e of errors) {
     const m = branchOf(e);
