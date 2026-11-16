@@ -97,4 +97,47 @@ export function registerSandboxTools(server: McpServer, client: StablesApiClient
       }
     }
   );
+
+  server.tool(
+    "simulate_balance_deposit",
+    "SANDBOX ONLY. Simulate a stablecoin deposit into your balance wallet on a network. The sender defaults to your first allowed (whitelisted) wallet, so a plain call credits the balance; an unknown sender is held for review, as it would be in production. Fails on production.",
+    {
+      network: z.enum(["ethereum", "polygon", "solana", "tron"]).describe("Balance network"),
+      amount: z
+        .string()
+        .describe("Amount in major units, e.g. '250' or '250.5' (at most 6 decimals)"),
+      currency: z.enum(["USDT", "USDC"]).default("USDT").describe("Stablecoin deposited"),
+      senderAddress: z
+        .string()
+        .optional()
+        .describe("On-chain sender. Defaults to your first allowed wallet on the network"),
+    },
+    async ({ network, amount, currency, senderAddress }) => {
+      try {
+        const result = await client.simulateBalanceDeposit(network, {
+          amount,
+          currency,
+          ...(senderAddress ? { sender_address: senderAddress } : {}),
+        });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Simulated a ${amount} ${currency} deposit on ${network}: ${result.status} (deposit ${result.deposit_id}).\n\nUse 'get_balance' or 'list_pending_balance_deposits' to follow it.`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Failed to simulate the balance deposit: ${error instanceof Error ? error.message : "Unknown error"}\n\nThis endpoint exists only in sandbox: on production it will not be found.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
 }

@@ -22,7 +22,8 @@ const CATEGORIES = [
   ["Compliance requests (RFIs)", ["list_rfis", "list_customer_rfis", "get_rfi", "get_rfi_evidence_form", "submit_rfi_evidence", "get_kyc_capabilities"]],
   ["Documents", ["add_document", "list_documents", "get_document_download_url", "delete_document"]],
   ["Balances", ["get_balance", "get_balance_wallet", "create_balance_wallet", "list_balance_activity", "list_pending_balance_deposits", "list_whitelisted_wallets"]],
-  ["Sandbox", ["simulate_route_deposit", "simulate_transfer_deposit"]],
+  ["Developer fee", ["get_developer_fee", "set_developer_fee", "remove_developer_fee"]],
+  ["Sandbox", ["simulate_route_deposit", "simulate_transfer_deposit", "simulate_balance_deposit"]],
   ["API keys", ["create_api_key", "list_api_keys", "get_api_key", "revoke_api_key"]],
   ["Webhooks", ["create_webhook", "list_webhooks", "delete_webhook", "list_webhook_deliveries"]],
 ];

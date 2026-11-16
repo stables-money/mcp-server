@@ -81,6 +81,11 @@ export const TOOL_POLICY: Record<string, ToolPolicy> = {
   list_pending_balance_deposits: read("List pending balance deposits"),
   list_whitelisted_wallets: read("List allowed wallets"),
 
+  // Developer fee
+  get_developer_fee: read("Get developer fee"),
+  set_developer_fee: write("Set developer fee", { idempotent: true }),
+  remove_developer_fee: write("Remove developer fee", { idempotent: true }),
+
   // Entitlements and compliance
   list_available_entitlements: read("List available entitlements"),
   request_entitlements: write("Request entitlements"),
@@ -113,6 +118,7 @@ export const TOOL_POLICY: Record<string, ToolPolicy> = {
   // Sandbox
   simulate_route_deposit: write("Simulate payment route deposit (sandbox)"),
   simulate_transfer_deposit: write("Simulate transfer deposit (sandbox)"),
+  simulate_balance_deposit: write("Simulate balance deposit (sandbox)"),
 };
 
 /**

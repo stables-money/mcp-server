@@ -13,12 +13,22 @@ export function registerVirtualAccountTools(server: McpServer, client: StablesAp
     "create_virtual_account",
     "Create a payment route (virtual bank account) so a customer can receive fiat deposits that convert to a stablecoin and pay out to a wallet. " +
       "The payout destination is mandatory: the API refuses a fiat-to-crypto route without one. " +
-      "Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_virtual_account.",
+      "Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_virtual_account. " +
+      "Set sourcePaymentRail to 'swift' for a SWIFT collection account: an IBAN that receives international SWIFT transfers, " +
+      "for business customers whose verification is approved and who hold the base_pay_in entitlement. " +
+      "It is not in the customer's name, and settles in USDT on Tron.",
     {
       customerId: z.string().describe("The customer ID to create the payment route for"),
       sourceCurrency: z
         .string()
         .describe("Fiat currency the route collects in (e.g. 'AUD', 'USD', 'EUR')"),
+      sourcePaymentRail: z
+        .enum(["swift"])
+        .optional()
+        .describe(
+          "Omit for the currency's local rail. 'swift' opens a SWIFT collection account (business customers with approved verification and base_pay_in). " +
+            "SWIFT currencies: AED, AUD, CAD, CHF, CZK, DKK, EUR, GBP, GEL, HKD, HUF, JPY, NZD, PLN, SEK, SGD, THB, USD; payout USDT on tron"
+        ),
       destinationAddress: z
         .string()
         .describe("Wallet address deposits are paid out to. Validated against the chosen network"),
@@ -44,6 +54,7 @@ export function registerVirtualAccountTools(server: McpServer, client: StablesAp
     async ({
       customerId,
       sourceCurrency,
+      sourcePaymentRail,
       destinationAddress,
       destinationPaymentRail,
       destinationCurrency,
@@ -53,7 +64,10 @@ export function registerVirtualAccountTools(server: McpServer, client: StablesAp
         // create schema and was silently ignored here. The server sets it, and
         // update_virtual_account changes it.
         const request = {
-          source: { currency: sourceCurrency },
+          source: {
+            currency: sourceCurrency,
+            ...(sourcePaymentRail ? { payment_rail: sourcePaymentRail } : {}),
+          },
           workflow_type: "fiat_to_crypto" as const,
           destination: {
             currency: destinationCurrency,
@@ -76,6 +90,8 @@ export function registerVirtualAccountTools(server: McpServer, client: StablesAp
         if (instructions.bic) depositInfo += `\nBIC: ${instructions.bic}`;
         if (instructions.account_holder_name)
           depositInfo += `\nAccount Holder: ${instructions.account_holder_name}`;
+        if (instructions.payment_rails.includes("swift"))
+          depositInfo += `\nSWIFT collection account: held in a Stables entity's name, not the customer's. Give payers every field above exactly as shown.`;
 
         const destInfo = account.destination
           ? `\nPayout Address: ${account.destination.address}\nPayment Rail: ${account.destination.payment_rail}\nCurrency: ${account.destination.currency}`

@@ -38,9 +38,10 @@ export interface VerificationLevelResponse {
   details?: unknown[];
 }
 
-/** The five feature entitlements the API accepts. */
+/** The feature entitlements the API accepts. */
 export const ENTITLEMENT_IDS = [
   "base_payout",
+  "base_pay_in",
   "virtual_account",
   "eur_virtual_account",
   "gbp_virtual_account",
@@ -187,6 +188,12 @@ export interface GenerateVerificationLinkResponse {
 // ============ BALANCE / ENTITLEMENT / WHITELIST TYPES ============
 
 export type BalanceNetwork = "ethereum" | "polygon" | "solana" | "tron";
+
+/** Developer fee parts as decimal strings; null when that part is not charged. */
+export interface DeveloperFee {
+  developer_fee_percent: string | null;
+  developer_fee_fixed_amount: string | null;
+}
 
 export interface BalanceResponse {
   balances: {
@@ -495,7 +502,8 @@ export interface VirtualAccount {
  * ignored. Change it afterwards with updateVirtualAccount.
  */
 export interface CreateVirtualAccountRequest {
-  source: { currency: string };
+  /** `payment_rail: "swift"` opens a SWIFT collection account (business customers only). */
+  source: { currency: string; payment_rail?: "swift" };
   /** Required for fiat_to_crypto, which is the default. */
   destination?: VirtualAccountDestination;
   workflow_type?: "fiat_to_crypto" | "fiat_to_fiat";
@@ -1599,6 +1607,36 @@ export class StablesApiClient {
 
   // ============ BALANCES ============
   // The API paths say "prefund"; the docs and dashboard call it the balance.
+
+  async getDeveloperFee(): Promise<DeveloperFee> {
+    return this.requestWithRetry<DeveloperFee>("/api/v1/developer-fee");
+  }
+
+  async setDeveloperFee(data: {
+    developer_fee_percent?: string | null;
+    developer_fee_fixed_amount?: string | null;
+  }): Promise<DeveloperFee> {
+    return this.requestWithRetry<DeveloperFee>("/api/v1/developer-fee", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async removeDeveloperFee(): Promise<DeveloperFee> {
+    return this.requestWithRetry<DeveloperFee>("/api/v1/developer-fee", { method: "DELETE" });
+  }
+
+  /** Sandbox only: credit the balance as if a stablecoin deposit arrived on `network`. */
+  async simulateBalanceDeposit(
+    network: BalanceNetwork,
+    data: { amount: string; currency: "USDT" | "USDC"; sender_address?: string; tx_hash?: string }
+  ): Promise<{ deposit_id: string; tx_hash: string; workflow_id?: string; status: string }> {
+    return this.requestWithRetry(`/api/v1/prefund/wallet/${network}/sandbox/simulate-deposit`, {
+      method: "POST",
+      body: JSON.stringify(data),
+      headers: { "idempotency-key": this.generateIdempotencyKey() },
+    });
+  }
 
   async getBalance(): Promise<BalanceResponse> {
     return this.requestWithRetry<BalanceResponse>("/api/v1/prefund/balance");
