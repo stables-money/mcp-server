@@ -57,7 +57,7 @@ The customer must send this amount to that address. Once received, Stables proce
 }
 
 // The API rejects anything else; listing them saves an agent a failed transfer.
-const PURPOSE_CODES = [
+export const PURPOSE_CODES = [
   "PAYMENT_FOR_SERVICES",
   "PAYMENT_FOR_SOFTWARE",
   "PAYMENT_FOR_IMPORTED_GOODS",

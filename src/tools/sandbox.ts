@@ -13,19 +13,26 @@ import { StablesApiClient } from "../lib/stables-client.js";
 export function registerSandboxTools(server: McpServer, client: StablesApiClient) {
   server.tool(
     "simulate_route_deposit",
-    "SANDBOX ONLY. Simulate a fiat deposit into a payment route so you can watch the conversion and payout complete without a real bank transfer. Fails on production.",
+    "SANDBOX ONLY. Simulate a deposit into a payment route so you can watch the conversion and payout complete without real money: a fiat deposit for an on-ramp or fiat-to-fiat route, or the route's USDT/USDC arriving on its address for an off-ramp (crypto_to_fiat) route. Fails on production.",
     {
       customerId: z.string().describe("The customer ID"),
       virtualAccountId: z.string().describe("The payment route (virtual account) ID"),
-      amount: z.string().describe("Deposit amount in major units (e.g. '500.00')"),
+      amount: z
+        .string()
+        .describe("Deposit amount in major units of the route's source currency (e.g. '500.00')"),
       scenario: z
         .enum(["create_only", "completed", "failed"])
         .optional()
         .describe(
-          "'completed' runs the deposit through to payout, 'failed' exercises the failure path, 'create_only' stops at the deposit"
+          "'completed' runs the deposit through to payout, 'failed' exercises the failure path, 'create_only' stops at the deposit. Off-ramp routes take 'completed' only"
         ),
-      senderName: z.string().optional().describe("Name to attribute the deposit to"),
-      senderReference: z.string().optional().describe("Payment reference on the deposit"),
+      senderName: z.string().optional().describe("Name to attribute the deposit to (fiat routes)"),
+      senderReference: z
+        .string()
+        .optional()
+        .describe(
+          "Payment reference on the deposit; for an off-ramp route, the sending wallet address"
+        ),
       externalDepositId: z.string().optional().describe("Your own reference for this deposit"),
     },
     async ({
