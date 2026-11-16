@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.6.13] - 2026-11-16
 
 ### Added
 - `create_virtual_account` creates off-ramp routes: set `workflowType` to
@@ -11,6 +11,9 @@
   `get_virtual_account_history`, never as transfers.
 - `get_virtual_account` (read-only): one payment route with its deposit
   instructions, including an off-ramp route's deposit address.
+- `simulate_route_deposit` (sandbox) covers off-ramp routes: the route's
+  USDT or USDC arrives on its address and pays out to its bank account.
+  Completed only; `senderReference` is the sending wallet.
 
 ## [2.6.12] - 2026-11-16
 
