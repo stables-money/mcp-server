@@ -10,7 +10,7 @@ MCP (Model Context Protocol) is an open standard that provides a standardized wa
 
 ## Features
 
-This MCP server provides 56 tools across 12 categories, one for every operation documented on [docs.stables.money](https://docs.stables.money)(a contract test checks this, see below):
+This MCP server provides 57 tools across 12 categories, one for every operation documented on [docs.stables.money](https://docs.stables.money)(a contract test checks this, see below):
 
 ### Customer Management
 - `create_customer` - Create individual or business customers
@@ -59,6 +59,7 @@ This MCP server provides 56 tools across 12 categories, one for every operation 
 ### Virtual Accounts
 - `create_virtual_account` - Create payment routes: virtual bank accounts for fiat deposits, or off-ramp routes (a permanent USDT/USDC address paid out to a bank account)
 - `get_virtual_account` - Get one payment route, including its deposit instructions
+- `set_virtual_account_status` - Turn a payment route off (no new deposits) or back on
 - `list_virtual_accounts` - List virtual accounts for a customer, or across all customers
 - `update_virtual_account` - Update virtual account settings
 - `register_route_payid` - Register a PayID on an AUD payment route

@@ -455,6 +455,16 @@ Update virtual account settings (e.g., deposit handling mode)
 | `virtualAccountId` | string | Yes | The virtual account ID to update |
 | `depositHandlingMode` | `auto_payout` \| `hold` \| `manual` | Yes | New deposit handling mode |
 
+#### set_virtual_account_status
+
+Deactivate a payment route so it stops accepting new deposits, or reactivate it. You can reactivate only a route your organization deactivated (deactivation_reason TENANT_REQUEST); a route Stables deactivated can only be reactivated by Stables support. Reactivating may charge the current month's account fee from the prefund balance if it has not been paid.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `customerId` | string | Yes | The customer ID |
+| `virtualAccountId` | string | Yes | The payment route (virtual account) ID |
+| `status` | `deactivated` \| `activated` | Yes | 'deactivated' to switch the route off, 'activated' to switch it back on |
+
 #### get_virtual_account_history
 
 Get the activity history for a virtual account (deposits, payouts, etc.)
