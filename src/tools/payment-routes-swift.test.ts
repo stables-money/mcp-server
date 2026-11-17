@@ -26,7 +26,7 @@ function swiftAccount() {
   };
 }
 
-describe("create_virtual_account", () => {
+describe("create_payment_route", () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
   let client: Client;
 
@@ -43,7 +43,7 @@ describe("create_virtual_account", () => {
       new StablesApiClient("sti_test_unit_secret", "https://api.test.stables.money")
     );
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-    client = new Client({ name: "virtual-accounts-test", version: "0" });
+    client = new Client({ name: "payment-routes-test", version: "0" });
     await Promise.all([server.connect(serverSide), client.connect(clientSide)]);
   });
 
@@ -53,7 +53,7 @@ describe("create_virtual_account", () => {
 
   it("asks for the SWIFT rail when sourcePaymentRail is swift", async () => {
     const result = await client.callTool({
-      name: "create_virtual_account",
+      name: "create_payment_route",
       arguments: {
         customerId: "cus_1",
         sourceCurrency: "EUR",
@@ -73,7 +73,7 @@ describe("create_virtual_account", () => {
 
   it("sends no rail when sourcePaymentRail is omitted", async () => {
     await client.callTool({
-      name: "create_virtual_account",
+      name: "create_payment_route",
       arguments: {
         customerId: "cus_1",
         sourceCurrency: "AUD",

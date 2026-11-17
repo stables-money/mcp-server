@@ -1104,7 +1104,7 @@ export class StablesApiClient {
 
     const query = searchParams.toString();
     return this.requestWithRetry<ListVirtualAccountsResponse>(
-      `/api/v1/virtual-accounts${query ? `?${query}` : ""}`
+      `/api/v1/payment-routes${query ? `?${query}` : ""}`
     );
   }
 
@@ -1119,7 +1119,7 @@ export class StablesApiClient {
 
     const query = searchParams.toString();
     return this.requestWithRetry<ListVirtualAccountsResponse>(
-      `/api/v1/customers/${customerId}/virtual-accounts${query ? `?${query}` : ""}`
+      `/api/v1/customers/${customerId}/payment-routes${query ? `?${query}` : ""}`
     );
   }
 
@@ -1127,19 +1127,16 @@ export class StablesApiClient {
     customerId: string,
     data: CreateVirtualAccountRequest
   ): Promise<VirtualAccount> {
-    return this.requestWithRetry<VirtualAccount>(
-      `/api/v1/customers/${customerId}/virtual-accounts`,
-      {
-        method: "POST",
-        body: JSON.stringify(data),
-        headers: { "idempotency-key": this.generateIdempotencyKey() },
-      }
-    );
+    return this.requestWithRetry<VirtualAccount>(`/api/v1/customers/${customerId}/payment-routes`, {
+      method: "POST",
+      body: JSON.stringify(data),
+      headers: { "idempotency-key": this.generateIdempotencyKey() },
+    });
   }
 
   async getVirtualAccount(customerId: string, virtualAccountId: string): Promise<VirtualAccount> {
     return this.requestWithRetry<VirtualAccount>(
-      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}`
+      `/api/v1/customers/${customerId}/payment-routes/${virtualAccountId}`
     );
   }
 
@@ -1149,7 +1146,7 @@ export class StablesApiClient {
     data: { deposit_handling_mode?: DepositHandlingMode }
   ): Promise<VirtualAccount> {
     return this.requestWithRetry<VirtualAccount>(
-      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}`,
+      `/api/v1/customers/${customerId}/payment-routes/${virtualAccountId}`,
       {
         method: "PATCH",
         body: JSON.stringify(data),
@@ -1179,7 +1176,7 @@ export class StablesApiClient {
 
     const query = searchParams.toString();
     return this.requestWithRetry<VirtualAccountHistoryResponse>(
-      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/history${query ? `?${query}` : ""}`
+      `/api/v1/customers/${customerId}/payment-routes/${virtualAccountId}/history${query ? `?${query}` : ""}`
     );
   }
 
@@ -1345,7 +1342,7 @@ export class StablesApiClient {
     status: "activated" | "deactivated"
   ): Promise<VirtualAccount> {
     return this.requestWithRetry<VirtualAccount>(
-      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/status`,
+      `/api/v1/customers/${customerId}/payment-routes/${virtualAccountId}/status`,
       {
         method: "PUT",
         body: JSON.stringify({ status }),
@@ -1359,7 +1356,7 @@ export class StablesApiClient {
     destination: VirtualAccountDestination
   ): Promise<VirtualAccount> {
     return this.requestWithRetry<VirtualAccount>(
-      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/destination`,
+      `/api/v1/customers/${customerId}/payment-routes/${virtualAccountId}/destination`,
       {
         method: "PUT",
         body: JSON.stringify(destination),
@@ -1371,7 +1368,7 @@ export class StablesApiClient {
   /** Register a PayID for an activated AUD payment route. */
   async registerPayId(customerId: string, virtualAccountId: string): Promise<PayIdRegistration> {
     return this.requestWithRetry<PayIdRegistration>(
-      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/payid`,
+      `/api/v1/customers/${customerId}/payment-routes/${virtualAccountId}/payid`,
       {
         method: "POST",
         body: JSON.stringify({}),
@@ -1502,7 +1499,7 @@ export class StablesApiClient {
     data: SandboxDepositRequest
   ): Promise<Record<string, unknown>> {
     return this.requestWithRetry<Record<string, unknown>>(
-      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/sandbox/simulate-deposit`,
+      `/api/v1/customers/${customerId}/payment-routes/${virtualAccountId}/sandbox/simulate-deposit`,
       {
         method: "POST",
         body: JSON.stringify(data),
@@ -1614,7 +1611,7 @@ export class StablesApiClient {
     virtualAccountId: string
   ): Promise<{ count: number; data: WhitelistedSourceAccount[] }> {
     return this.requestWithRetry(
-      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/whitelist-accounts`
+      `/api/v1/customers/${customerId}/payment-routes/${virtualAccountId}/whitelist-accounts`
     );
   }
 
@@ -1628,7 +1625,7 @@ export class StablesApiClient {
     }
   ): Promise<WhitelistedSourceAccount> {
     return this.requestWithRetry<WhitelistedSourceAccount>(
-      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/whitelist-accounts`,
+      `/api/v1/customers/${customerId}/payment-routes/${virtualAccountId}/whitelist-accounts`,
       {
         method: "POST",
         body: JSON.stringify({ source_account: sourceAccount }),
@@ -1644,7 +1641,7 @@ export class StablesApiClient {
     data: { account_number: string; bsb_number: string; account_status: "enabled" | "disabled" }
   ): Promise<WhitelistedSourceAccount> {
     return this.requestWithRetry<WhitelistedSourceAccount>(
-      `/api/v1/customers/${customerId}/virtual-accounts/${virtualAccountId}/whitelist-accounts/${sourceAccountId}`,
+      `/api/v1/customers/${customerId}/payment-routes/${virtualAccountId}/whitelist-accounts/${sourceAccountId}`,
       {
         method: "PATCH",
         body: JSON.stringify(data),

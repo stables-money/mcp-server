@@ -36,7 +36,32 @@ const write = (title: string, extra: Partial<ToolPolicy> = {}): ToolPolicy => ({
 });
 const admin = (title: string): ToolPolicy => ({ access: "admin", title });
 
-export const TOOL_POLICY: Record<string, ToolPolicy> = {
+/**
+ * Old tool names kept for one release after a rename, mapped to the current
+ * name. Each is registered as a copy of the current tool (same inputs, same
+ * handler, same access) whose description says it is deprecated, so connected
+ * agents keep working while they move. Delete an entry to remove the alias.
+ *
+ * The API renamed /virtual-accounts to /payment-routes (a route can be an
+ * off-ramp, which is not a virtual account), and the tools followed.
+ */
+export const DEPRECATED_TOOL_ALIASES: Record<string, string> = {
+  create_virtual_account: "create_payment_route",
+  get_virtual_account: "get_payment_route",
+  list_virtual_accounts: "list_payment_routes",
+  update_virtual_account: "update_payment_route",
+  set_virtual_account_status: "set_payment_route_status",
+  get_virtual_account_history: "get_payment_route_history",
+};
+
+/** The deprecated names that point at a tool, given its current name. */
+export function aliasesOf(toolName: string): string[] {
+  return Object.entries(DEPRECATED_TOOL_ALIASES)
+    .filter(([, current]) => current === toolName)
+    .map(([alias]) => alias);
+}
+
+const CURRENT_TOOL_POLICY: Record<string, ToolPolicy> = {
   // Customers
   list_customers: read("List customers"),
   get_customer: read("Get customer"),
@@ -60,14 +85,14 @@ export const TOOL_POLICY: Record<string, ToolPolicy> = {
   create_beneficiary: write("Save beneficiary", { idempotent: true }),
   archive_beneficiary: write("Archive saved beneficiary", { idempotent: true }),
 
-  // Payment routes (virtual accounts)
-  create_virtual_account: write("Create payment route"),
-  get_virtual_account: read("Get payment route"),
-  list_virtual_accounts: read("List payment routes"),
-  update_virtual_account: write("Update payment route", { idempotent: true }),
-  set_virtual_account_status: write("Turn payment route off or on", { idempotent: true }),
+  // Payment routes (API: /payment-routes, formerly /virtual-accounts)
+  create_payment_route: write("Create payment route"),
+  get_payment_route: read("Get payment route"),
+  list_payment_routes: read("List payment routes"),
+  update_payment_route: write("Update payment route", { idempotent: true }),
+  set_payment_route_status: write("Turn payment route off or on", { idempotent: true }),
   update_route_destination: write("Change payment route destination", { idempotent: true }),
-  get_virtual_account_history: read("Get payment route history"),
+  get_payment_route_history: read("Get payment route history"),
   list_route_whitelist: read("List payment route allowed senders"),
   add_route_whitelist_account: write("Add payment route allowed sender"),
   update_route_whitelist_account: write("Update payment route allowed sender", {
@@ -121,6 +146,19 @@ export const TOOL_POLICY: Record<string, ToolPolicy> = {
   simulate_route_deposit: write("Simulate payment route deposit (sandbox)"),
   simulate_transfer_deposit: write("Simulate transfer deposit (sandbox)"),
   simulate_balance_deposit: write("Simulate balance deposit (sandbox)"),
+};
+
+/** Every tool name the server answers to, deprecated aliases included. */
+export const TOOL_POLICY: Record<string, ToolPolicy> = {
+  ...CURRENT_TOOL_POLICY,
+  ...Object.fromEntries(
+    Object.entries(DEPRECATED_TOOL_ALIASES).map(([alias, current]) => {
+      const policy = CURRENT_TOOL_POLICY[current];
+      if (!policy)
+        throw new Error(`Deprecated alias "${alias}" points at unknown tool "${current}"`);
+      return [alias, { ...policy, title: `${policy.title} (deprecated name)` }];
+    })
+  ),
 };
 
 /**

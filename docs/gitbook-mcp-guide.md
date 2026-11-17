@@ -300,9 +300,9 @@ List transfers with optional filters for status, type, or customer
 
 ### Payment routes
 
-#### create_virtual_account
+#### create_payment_route
 
-Create a payment route (virtual bank account) so a customer can receive fiat deposits that convert to a stablecoin and pay out to a wallet. The payout destination is mandatory: the API refuses a fiat-to-crypto route without one. Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_virtual_account.
+Create a payment route (virtual bank account) so a customer can receive fiat deposits that convert to a stablecoin and pay out to a wallet. The payout destination is mandatory: the API refuses a fiat-to-crypto route without one. Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_payment_route.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -313,34 +313,34 @@ Create a payment route (virtual bank account) so a customer can receive fiat dep
 | `destinationCurrency` | `usdc` \| `usdt` \| `dai` \| `pyusd` \| `eurc` | No | Stablecoin to receive. Default: `"usdt"`. |
 | `developerFeePercent` | string | No | Your fee on each deposit, as a numeric string (e.g. '0.5') |
 
-#### list_virtual_accounts
+#### list_payment_routes
 
-List all virtual accounts for a customer
+List all payment routes for a customer
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `customerId` | string | Yes | The customer ID to list virtual accounts for |
+| `customerId` | string | Yes | The customer ID to list payment routes for |
 | `status` | `activated` \| `deactivated` \| `pending` \| `closed` | No | Filter by account status |
 | `limit` | number | No | Maximum number of accounts to return |
 
-#### update_virtual_account
+#### update_payment_route
 
-Update virtual account settings (e.g., deposit handling mode)
+Update a payment route's settings (e.g., deposit handling mode)
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID |
-| `virtualAccountId` | string | Yes | The virtual account ID to update |
+| `virtualAccountId` | string | Yes | The payment route ID to update |
 | `depositHandlingMode` | `auto_payout` \| `hold` \| `manual` | Yes | New deposit handling mode |
 
-#### get_virtual_account_history
+#### get_payment_route_history
 
-Get the activity history for a virtual account (deposits, payouts, etc.)
+Get the activity history for a payment route: each deposit and the payout it triggered
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID |
-| `virtualAccountId` | string | Yes | The virtual account ID |
+| `virtualAccountId` | string | Yes | The payment route ID |
 | `limit` | number | No | Maximum number of events to return (default: 10) |
 
 #### update_route_destination
@@ -350,7 +350,7 @@ Change the payout wallet on an existing payment route. Deposits after this point
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID |
-| `virtualAccountId` | string | Yes | The payment route (virtual account) ID |
+| `virtualAccountId` | string | Yes | The payment route ID |
 | `destinationAddress` | string | Yes | New payout wallet address |
 | `destinationPaymentRail` | `arbitrum` \| `avalanche_c_chain` \| `base` \| `celo` \| `ethereum` \| `optimism` \| `polygon` \| `solana` \| `stellar` \| `tron` | Yes | Blockchain network the new address belongs to |
 | `destinationCurrency` | `usdc` \| `usdt` \| `dai` \| `pyusd` \| `eurc` | No | Stablecoin to receive. Default: `"usdt"`. |
@@ -364,7 +364,7 @@ SANDBOX ONLY. Simulate a fiat deposit into a payment route so you can watch the 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID |
-| `virtualAccountId` | string | Yes | The payment route (virtual account) ID |
+| `virtualAccountId` | string | Yes | The payment route ID |
 | `amount` | string | Yes | Deposit amount in major units (e.g. '500.00') |
 | `scenario` | `create_only` \| `completed` \| `failed` | No | 'completed' runs the deposit through to payout, 'failed' exercises the failure path, 'create_only' stops at the deposit |
 | `senderName` | string | No | Name to attribute the deposit to |
@@ -480,7 +480,7 @@ The agent calls `create_transfer` with the quote and the beneficiary details, an
 
 > "Create a USD payment route for customer abc123 that pays out USDT on Base to 0x…"
 
-The agent calls `create_virtual_account` and returns the deposit instructions. Later, "change the payout wallet on that route" calls `update_route_destination`, and "show me the deposit history" calls `get_virtual_account_history`.
+The agent calls `create_payment_route` and returns the deposit instructions. Later, "change the payout wallet on that route" calls `update_route_destination`, and "show me the deposit history" calls `get_payment_route_history`.
 
 **Test a deposit in sandbox**
 

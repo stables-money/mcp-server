@@ -1,5 +1,5 @@
 /**
- * Virtual Account Tools for Stables MCP Server
+ * Payment route tools for Stables MCP Server (API: /payment-routes)
  * Synced with OpenAPI spec from https://api.stables.money/docs
  */
 
@@ -100,7 +100,7 @@ function describeVirtualAccount(account: VirtualAccount): string {
   const balanceInfo = account.held_balance
     ? `\nHeld Balance: ${account.held_balance.amount} ${account.held_balance.currency}`
     : "";
-  return `Account ID: ${account.id}
+  return `Route ID: ${account.id}
 Status: ${account.status}
 Customer ID: ${account.customer_id}${account.workflow_type ? `\nType: ${account.workflow_type}` : ""}
 Deposit Mode: ${account.deposit_handling_mode}
@@ -114,16 +114,16 @@ ${balanceInfo}
 Created: ${account.created_at}`;
 }
 
-export function registerVirtualAccountTools(server: McpServer, client: StablesApiClient) {
-  // Create Virtual Account
+export function registerPaymentRouteTools(server: McpServer, client: StablesApiClient) {
+  // Create payment route
   server.tool(
-    "create_virtual_account",
+    "create_payment_route",
     "Create a payment route for a customer. " +
       "fiat_to_crypto (the default) issues a virtual bank account: fiat deposits convert to a stablecoin and pay out to a wallet, so destinationAddress and destinationPaymentRail are required. " +
       "Set sourcePaymentRail to 'swift' for a SWIFT collection account: an IBAN that receives international SWIFT transfers, for business customers whose verification is approved and who hold the base_pay_in entitlement; it is not in the customer's name, and settles in USDT on Tron. " +
       "crypto_to_fiat (an off-ramp route) issues a permanent USDT or USDC deposit address on sourceNetwork: every deposit converts and pays out to one bank account, given as a saved beneficiary (payoutType beneficiary + beneficiaryId) or as bank details. " +
-      "On a crypto_to_fiat route, swiftCode or bicCode is needed only when payoutNetwork is swift. Its deposits are route transactions, read with get_virtual_account_history, never transfers. " +
-      "Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_virtual_account.",
+      "On a crypto_to_fiat route, swiftCode or bicCode is needed only when payoutNetwork is swift. Its deposits are route transactions, read with get_payment_route_history, never transfers. " +
+      "Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_payment_route.",
     {
       customerId: z.string().describe("The customer ID to create the payment route for"),
       workflowType: z
@@ -234,7 +234,7 @@ export function registerVirtualAccountTools(server: McpServer, client: StablesAp
           }
           // deposit_handling_mode is deliberately absent: it is not part of the
           // create schema and was silently ignored here. The server sets it, and
-          // update_virtual_account changes it.
+          // update_payment_route changes it.
           request = {
             source: {
               currency: input.sourceCurrency,
@@ -269,7 +269,7 @@ Share the deposit instructions with the customer to receive funds.`,
           content: [
             {
               type: "text",
-              text: `Failed to create virtual account: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: `Failed to create payment route: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
           isError: true,
@@ -278,13 +278,13 @@ Share the deposit instructions with the customer to receive funds.`,
     }
   );
 
-  // Get one Virtual Account
+  // Get one payment route
   server.tool(
-    "get_virtual_account",
+    "get_payment_route",
     "Get one payment route by ID, including its deposit instructions (bank details, or an off-ramp route's deposit address) and payout destination",
     {
       customerId: z.string().describe("The customer ID"),
-      virtualAccountId: z.string().describe("The payment route (virtual account) ID"),
+      virtualAccountId: z.string().describe("The payment route ID"),
     },
     async ({ customerId, virtualAccountId }) => {
       try {
@@ -295,7 +295,7 @@ Share the deposit instructions with the customer to receive funds.`,
           content: [
             {
               type: "text",
-              text: `Failed to get virtual account: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: `Failed to get payment route: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
           isError: true,
@@ -304,10 +304,10 @@ Share the deposit instructions with the customer to receive funds.`,
     }
   );
 
-  // List Virtual Accounts (by customer)
+  // List payment routes
   server.tool(
-    "list_virtual_accounts",
-    "List payment routes (virtual accounts) for one customer, or across every customer when customerId is omitted",
+    "list_payment_routes",
+    "List payment routes for one customer, or across every customer when customerId is omitted",
     {
       customerId: z
         .string()
@@ -316,8 +316,8 @@ Share the deposit instructions with the customer to receive funds.`,
       status: z
         .enum(["activated", "deactivated", "pending", "closed"])
         .optional()
-        .describe("Filter by account status"),
-      limit: z.number().optional().describe("Maximum number of accounts to return"),
+        .describe("Filter by route status"),
+      limit: z.number().optional().describe("Maximum number of routes to return"),
       startingAfter: z
         .string()
         .optional()
@@ -335,7 +335,7 @@ Share the deposit instructions with the customer to receive funds.`,
             content: [
               {
                 type: "text",
-                text: `No virtual accounts found for ${scope}. Use 'create_virtual_account' to create one.`,
+                text: `No payment routes found for ${scope}. Use 'create_payment_route' to create one.`,
               },
             ],
           };
@@ -362,7 +362,7 @@ Share the deposit instructions with the customer to receive funds.`,
           content: [
             {
               type: "text",
-              text: `Virtual Accounts for ${scope} (${response.count} total):
+              text: `Payment Routes for ${scope} (${response.count} total):
 
 ${accountList}`,
             },
@@ -373,7 +373,7 @@ ${accountList}`,
           content: [
             {
               type: "text",
-              text: `Failed to list virtual accounts: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: `Failed to list payment routes: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
           isError: true,
@@ -385,7 +385,7 @@ ${accountList}`,
   // AUD payment route whitelisting
   const whitelistIds = {
     customerId: z.string().describe("The customer ID"),
-    virtualAccountId: z.string().describe("The AUD payment route (virtual account) ID"),
+    virtualAccountId: z.string().describe("The AUD payment route ID"),
   };
 
   server.tool(
@@ -518,13 +518,13 @@ ${accountList}`,
     }
   );
 
-  // Update Virtual Account
+  // Update payment route
   server.tool(
-    "update_virtual_account",
-    "Update virtual account settings (e.g., deposit handling mode)",
+    "update_payment_route",
+    "Update a payment route's settings (e.g., deposit handling mode)",
     {
       customerId: z.string().describe("The customer ID"),
-      virtualAccountId: z.string().describe("The virtual account ID to update"),
+      virtualAccountId: z.string().describe("The payment route ID to update"),
       depositHandlingMode: z
         .enum(["auto_payout", "hold", "manual"])
         .describe("New deposit handling mode"),
@@ -539,7 +539,7 @@ ${accountList}`,
           content: [
             {
               type: "text",
-              text: `Virtual account ${account.id} updated.
+              text: `Payment route ${account.id} updated.
 Deposit Mode: ${account.deposit_handling_mode}
 Status: ${account.status}`,
             },
@@ -550,7 +550,7 @@ Status: ${account.status}`,
           content: [
             {
               type: "text",
-              text: `Failed to update virtual account: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: `Failed to update payment route: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
           isError: true,
@@ -559,16 +559,16 @@ Status: ${account.status}`,
     }
   );
 
-  // Turn a Virtual Account off or on
+  // Turn a payment route off or on
   server.tool(
-    "set_virtual_account_status",
+    "set_payment_route_status",
     "Deactivate a payment route so it stops accepting new deposits, or reactivate it. " +
       "You can reactivate only a route your organization deactivated (deactivation_reason TENANT_REQUEST); " +
       "a route Stables deactivated can only be reactivated by Stables support. " +
       "Reactivating may charge the current month's account fee from the prefund balance if it has not been paid.",
     {
       customerId: z.string().describe("The customer ID"),
-      virtualAccountId: z.string().describe("The payment route (virtual account) ID"),
+      virtualAccountId: z.string().describe("The payment route ID"),
       status: z
         .enum(["deactivated", "activated"])
         .describe("'deactivated' to switch the route off, 'activated' to switch it back on"),
@@ -602,13 +602,13 @@ Status: ${account.status}`,
     }
   );
 
-  // Get Virtual Account History
+  // Get payment route history
   server.tool(
-    "get_virtual_account_history",
-    "Get the activity history for a virtual account (deposits, payouts, etc.)",
+    "get_payment_route_history",
+    "Get the activity history for a payment route: each deposit and the payout it triggered",
     {
       customerId: z.string().describe("The customer ID"),
-      virtualAccountId: z.string().describe("The virtual account ID"),
+      virtualAccountId: z.string().describe("The payment route ID"),
       limit: z.number().optional().describe("Maximum number of events to return (default: 10)"),
     },
     async ({ customerId, virtualAccountId, limit }) => {
@@ -622,7 +622,7 @@ Status: ${account.status}`,
             content: [
               {
                 type: "text",
-                text: `No activity found for virtual account ${virtualAccountId}.`,
+                text: `No activity found for payment route ${virtualAccountId}.`,
               },
             ],
           };
@@ -663,7 +663,7 @@ ${eventList}`,
           content: [
             {
               type: "text",
-              text: `Failed to get virtual account history: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: `Failed to get payment route history: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
           isError: true,
@@ -678,7 +678,7 @@ ${eventList}`,
     "Change the payout wallet on an existing payment route. Deposits after this point are paid out to the new address; use it when a customer rotates wallets rather than creating a second route.",
     {
       customerId: z.string().describe("The customer ID"),
-      virtualAccountId: z.string().describe("The payment route (virtual account) ID"),
+      virtualAccountId: z.string().describe("The payment route ID"),
       destinationAddress: z.string().describe("New payout wallet address"),
       destinationPaymentRail: z
         .enum([
@@ -745,7 +745,7 @@ Future deposits pay out to this address.`,
     "Register a PayID for an activated AUD payment route, so payers can send to an email-style alias instead of a BSB and account number. Calling it again on a route that already has one returns the existing PayID.",
     {
       customerId: z.string().describe("The customer ID"),
-      virtualAccountId: z.string().describe("The AUD payment route (virtual account) ID"),
+      virtualAccountId: z.string().describe("The AUD payment route ID"),
     },
     async ({ customerId, virtualAccountId }) => {
       try {

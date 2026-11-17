@@ -7,12 +7,19 @@
 
 import { McpServer, type RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { StablesApiClient } from "./lib/stables-client.js";
-import { FULL_ACCESS, TOOL_POLICY, allows, annotationsFor, type ToolGrant } from "./tool-policy.js";
+import {
+  FULL_ACCESS,
+  TOOL_POLICY,
+  aliasesOf,
+  allows,
+  annotationsFor,
+  type ToolGrant,
+} from "./tool-policy.js";
 import { registerCustomerTools } from "./tools/customers.js";
 import { registerQuoteTools } from "./tools/quotes.js";
 import { registerTransferTools } from "./tools/transfers.js";
 import { registerBeneficiaryTools } from "./tools/beneficiaries.js";
-import { registerVirtualAccountTools } from "./tools/virtual-accounts.js";
+import { registerPaymentRouteTools } from "./tools/payment-routes.js";
 import { registerApiKeyTools } from "./tools/api-keys.js";
 import { registerWebhookTools } from "./tools/webhooks.js";
 import { registerSandboxTools } from "./tools/sandbox.js";
@@ -46,7 +53,7 @@ export function createStablesMcpServer(
     name: SERVER_NAME,
     version: SERVER_VERSION,
     description:
-      "Stables fiat-to-crypto API for AI agents - manage customers, quotes, transfers, and virtual accounts",
+      "Stables fiat-to-crypto API for AI agents - manage customers, quotes, transfers, and payment routes",
   });
 
   // Capture every tool as it registers, so each gets its label below.
@@ -55,8 +62,16 @@ export function createStablesMcpServer(
   (server as unknown as { tool: (...args: unknown[]) => RegisteredTool }).tool = (
     ...args: unknown[]
   ) => {
+    const name = String(args[0]);
     const tool = register(...args);
-    registered.set(String(args[0]), tool);
+    registered.set(name, tool);
+    // A renamed tool is also registered under its old name for one release.
+    for (const alias of aliasesOf(name)) {
+      const description =
+        `Deprecated: renamed to ${name}; this name will be removed, call ${name} instead. ` +
+        String(args[1]);
+      registered.set(alias, register(alias, description, ...args.slice(2)));
+    }
     return tool;
   };
 
@@ -64,7 +79,7 @@ export function createStablesMcpServer(
   registerQuoteTools(server, client);
   registerTransferTools(server, client);
   registerBeneficiaryTools(server, client);
-  registerVirtualAccountTools(server, client);
+  registerPaymentRouteTools(server, client);
   registerApiKeyTools(server, client);
   registerWebhookTools(server, client);
   registerBalanceTools(server, client);

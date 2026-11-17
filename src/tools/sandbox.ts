@@ -16,7 +16,7 @@ export function registerSandboxTools(server: McpServer, client: StablesApiClient
     "SANDBOX ONLY. Simulate a deposit into a payment route so you can watch the conversion and payout complete without real money: a fiat deposit for an on-ramp or fiat-to-fiat route, or the route's USDT/USDC arriving on its address for an off-ramp (crypto_to_fiat) route. Fails on production.",
     {
       customerId: z.string().describe("The customer ID"),
-      virtualAccountId: z.string().describe("The payment route (virtual account) ID"),
+      virtualAccountId: z.string().describe("The payment route ID"),
       amount: z
         .string()
         .describe("Deposit amount in major units of the route's source currency (e.g. '500.00')"),
@@ -56,7 +56,7 @@ export function registerSandboxTools(server: McpServer, client: StablesApiClient
           content: [
             {
               type: "text" as const,
-              text: `Simulated deposit of ${amount} into route ${virtualAccountId}:\n\n${JSON.stringify(result, null, 2)}\n\nUse 'get_virtual_account_history' to see the deposit and its payout.`,
+              text: `Simulated deposit of ${amount} into route ${virtualAccountId}:\n\n${JSON.stringify(result, null, 2)}\n\nUse 'get_payment_route_history' to see the deposit and its payout.`,
             },
           ],
         };

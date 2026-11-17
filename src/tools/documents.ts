@@ -16,7 +16,7 @@ const OWNER = z
   .describe("What the document belongs to: a transfer, or a deposit on a payment route");
 const TRANSACTION_ID = z
   .string()
-  .describe("The transfer ID, or the deposit ID from get_virtual_account_history");
+  .describe("The transfer ID, or the deposit ID from get_payment_route_history");
 
 function formatError(error: unknown): string {
   if (error instanceof StablesApiError) return `${error.message} (HTTP ${error.statusCode})`;
