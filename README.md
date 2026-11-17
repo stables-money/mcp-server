@@ -1,8 +1,8 @@
 # Stables MCP Server
 
-An MCP (Model Context Protocol) server that exposes the Stables fiat-to-crypto API to AI agents. This allows AI assistants like Claude, ChatGPT, Cursor, Codex, and other MCP-compatible clients to manage customers, create USDC and USDT quotes, execute approved transfers, and handle virtual accounts programmatically.
+An MCP (Model Context Protocol) server that exposes the Stables fiat-to-crypto API to AI agents. This allows AI assistants like Claude, ChatGPT, Cursor, Codex, and other MCP-compatible clients to manage customers, create USDC and USDT quotes, execute approved transfers, and manage payment routes programmatically.
 
-Use it to build stablecoin payment workflows for AI agents and agentic commerce: payouts, virtual account deposits, treasury movement, fiat off-ramping, and webhook reconciliation.
+Use it to build stablecoin payment workflows for AI agents and agentic commerce: payouts, payment route deposits, treasury movement, fiat off-ramping, and webhook reconciliation.
 
 ## What is MCP?
 
@@ -56,16 +56,18 @@ This MCP server provides 57 tools across 12 categories, one for every operation 
 - `create_beneficiary` - Save a recipient and bank account (validated like a transfer)
 - `archive_beneficiary` - Archive a beneficiary so it can no longer be paid
 
-### Virtual Accounts
-- `create_virtual_account` - Create payment routes: virtual bank accounts for fiat deposits, or off-ramp routes (a permanent USDT/USDC address paid out to a bank account)
-- `get_virtual_account` - Get one payment route, including its deposit instructions
-- `set_virtual_account_status` - Turn a payment route off (no new deposits) or back on
-- `list_virtual_accounts` - List virtual accounts for a customer, or across all customers
-- `update_virtual_account` - Update virtual account settings
+### Payment Routes
+- `create_payment_route` - Create payment routes: virtual bank accounts for fiat deposits, or off-ramp routes (a permanent USDT/USDC address paid out to a bank account)
+- `get_payment_route` - Get one payment route, including its deposit instructions
+- `set_payment_route_status` - Turn a payment route off (no new deposits) or back on
+- `list_payment_routes` - List payment routes for a customer, or across all customers
+- `update_payment_route` - Update a payment route's settings (deposit handling mode)
 - `register_route_payid` - Register a PayID on an AUD payment route
-- `get_virtual_account_history` - Get deposits and their payouts for a payment route
+- `get_payment_route_history` - Get deposits and their payouts for a payment route
 - `update_route_destination` - Change the payout wallet on an existing route
 - `list_route_whitelist` / `add_route_whitelist_account` / `update_route_whitelist_account` - Source-account whitelisting for AUD routes
+
+The old names (`create_virtual_account`, `get_virtual_account`, `list_virtual_accounts`, `update_virtual_account`, `set_virtual_account_status`, `get_virtual_account_history`) still work for one release as deprecated aliases.
 
 ### Balances
 - `get_balance` - Your organisation's balance per asset and network
@@ -273,7 +275,7 @@ STABLES_API_KEY=your-api-key node build/index.js
 **User:** "Create a payment route for customer abc123 that pays AUD deposits out to my Polygon USDT wallet 0x..."
 
 **AI (using MCP tools):**
-1. Calls `create_virtual_account` with the customer ID, AUD source currency, and the Polygon destination (the payout address is mandatory)
+1. Calls `create_payment_route` with the customer ID, AUD source currency, and the Polygon destination (the payout address is mandatory)
 2. Returns the deposit instructions to share with the customer
 
 ### Paying out to a European beneficiary
@@ -339,7 +341,7 @@ stables-mcp-server/
 │       ├── quotes.ts         # Quote tools (2)
 │       ├── transfers.ts      # Transfer tools (4)
 │       ├── beneficiaries.ts  # Saved beneficiary tools (4)
-│       ├── virtual-accounts.ts # Payment route tools (9)
+│       ├── payment-routes.ts # Payment route tools (11)
 │       ├── balances.ts       # Balance tools (6)
 │       ├── api-keys.ts       # API key tools (4)
 │       ├── webhooks.ts       # Webhook tools (3)
@@ -468,10 +470,10 @@ List transfers with filters.
 | pageSize | number | No | Results per page |
 | pageToken | string | No | Pagination token |
 
-### Virtual Account Tools
+### Payment Route Tools
 
-#### create_virtual_account
-Create a virtual bank account.
+#### create_payment_route
+Create a payment route: a virtual bank account for fiat deposits, or an off-ramp route.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -482,8 +484,8 @@ Create a virtual bank account.
 | destinationPaymentRail | string | No | Blockchain network |
 | destinationCurrency | string | No | Stablecoin (default: "usdc") |
 
-#### list_virtual_accounts
-List virtual accounts for a customer.
+#### list_payment_routes
+List payment routes for a customer.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -491,22 +493,22 @@ List virtual accounts for a customer.
 | status | string | No | Filter by status |
 | limit | number | No | Max results |
 
-#### update_virtual_account
-Update virtual account settings.
+#### update_payment_route
+Update a payment route's settings.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | customerId | string | Yes | Customer ID |
-| virtualAccountId | string | Yes | Virtual account ID |
+| virtualAccountId | string | Yes | Payment route ID |
 | depositHandlingMode | string | Yes | New deposit handling mode |
 
-#### get_virtual_account_history
-Get activity history for a virtual account.
+#### get_payment_route_history
+Get the deposits and payouts on a payment route.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | customerId | string | Yes | Customer ID |
-| virtualAccountId | string | Yes | Virtual account ID |
+| virtualAccountId | string | Yes | Payment route ID |
 | limit | number | No | Max events to return |
 | eventType | string | No | Filter by event type |
 

@@ -528,7 +528,7 @@ describe("StablesApiClient", () => {
       fetchSpy.mockResolvedValueOnce(mockResponse({ ok: true }));
       await client.simulateVirtualAccountDeposit("cus_1", "va_1", { amount: "100" });
       expect(fetchSpy.mock.calls[0][0]).toContain(
-        "/api/v1/customers/cus_1/virtual-accounts/va_1/sandbox/simulate-deposit"
+        "/api/v1/customers/cus_1/payment-routes/va_1/sandbox/simulate-deposit"
       );
 
       fetchSpy.mockResolvedValueOnce(mockResponse({ id: "va_1" }));
@@ -538,7 +538,7 @@ describe("StablesApiClient", () => {
         address: "0xdef",
       });
       expect(fetchSpy.mock.calls[1][0]).toContain(
-        "/api/v1/customers/cus_1/virtual-accounts/va_1/destination"
+        "/api/v1/customers/cus_1/payment-routes/va_1/destination"
       );
       expect((fetchSpy.mock.calls[1][1] as RequestInit).method).toBe("PUT");
     });

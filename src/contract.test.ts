@@ -31,12 +31,24 @@ import { createStablesMcpServer } from "./server.js";
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Operation = { method: string; path: string; page?: string };
 
+const AUD_WHITELIST =
+  "AUD route allowed senders: in the published OpenAPI spec, but no API Reference page names it yet";
+
 /**
  * Operations the MCP calls that the docs do not (yet) document. Each is real
  * and deployed; listing it here is a statement that we expose it on purpose.
  * A new undocumented call fails the test until it is added, with a reason.
  */
-const UNDOCUMENTED_ON_PURPOSE: Record<string, string> = {};
+const UNDOCUMENTED_ON_PURPOSE: Record<string, string> = {
+  "GET /api/v1/customers/{customerId}/payment-routes/{virtualAccountId}/whitelist-accounts":
+    AUD_WHITELIST,
+  "POST /api/v1/customers/{customerId}/payment-routes/{virtualAccountId}/whitelist-accounts":
+    AUD_WHITELIST,
+  "PATCH /api/v1/customers/{customerId}/payment-routes/{virtualAccountId}/whitelist-accounts/{sourceAccountId}":
+    AUD_WHITELIST,
+  "POST /api/v1/customers/{customerId}/payment-routes/{virtualAccountId}/payid":
+    "PayID on AUD routes: in the published OpenAPI spec, but no API Reference page names it yet",
+};
 
 /**
  * Documented operations with no tool, on purpose. Empty is the goal; an entry
@@ -48,9 +60,9 @@ const UUID = "11111111-1111-4111-8111-111111111111";
 
 /** Extra inputs for tools whose branches a single generated input cannot reach. */
 const EXTRA_CASES: Record<string, Json[]> = {
-  list_virtual_accounts: [{}], // no customerId: the list across every customer
+  list_payment_routes: [{}], // no customerId: the list across every customer
   // Off-ramp routes: the generated input takes the fiat_to_crypto default.
-  create_virtual_account: [
+  create_payment_route: [
     {
       customerId: UUID,
       workflowType: "crypto_to_fiat",

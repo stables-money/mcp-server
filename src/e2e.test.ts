@@ -191,10 +191,10 @@ describe.skipIf(!KEY)("MCP end to end against sandbox", () => {
   }, 60_000);
 
   it("reads payment routes and their history", async () => {
-    await call("list_virtual_accounts", {});
+    await call("list_payment_routes", {});
     expect(ids.virtualAccountId, "sandbox has no payment route to read").toBeTruthy();
-    await call("list_virtual_accounts", { customerId: ids.routeCustomerId });
-    await call("get_virtual_account_history", {
+    await call("list_payment_routes", { customerId: ids.routeCustomerId });
+    await call("get_payment_route_history", {
       customerId: ids.routeCustomerId,
       virtualAccountId: ids.virtualAccountId,
     });

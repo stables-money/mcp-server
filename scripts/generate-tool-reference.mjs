@@ -11,6 +11,7 @@
  */
 
 import { handleRequest } from "../build/http/handler.js";
+import { DEPRECATED_TOOL_ALIASES } from "../build/tool-policy.js";
 
 const CATEGORIES = [
   ["Customers", ["create_customer", "create_customer_onboarding_link", "get_customer", "list_customers", "get_verification_link", "update_customer", "update_customer_metadata"]],
@@ -18,7 +19,7 @@ const CATEGORIES = [
   ["Quotes", ["create_quote", "get_quote"]],
   ["Transfers", ["validate_payment_method", "create_transfer", "get_transfer", "list_transfers"]],
   ["Saved beneficiaries", ["list_beneficiaries", "get_beneficiary", "create_beneficiary", "archive_beneficiary"]],
-  ["Payment routes", ["create_virtual_account", "get_virtual_account", "list_virtual_accounts", "update_virtual_account", "set_virtual_account_status", "get_virtual_account_history", "update_route_destination", "list_route_whitelist", "add_route_whitelist_account", "update_route_whitelist_account", "register_route_payid"]],
+  ["Payment routes", ["create_payment_route", "get_payment_route", "list_payment_routes", "update_payment_route", "set_payment_route_status", "get_payment_route_history", "update_route_destination", "list_route_whitelist", "add_route_whitelist_account", "update_route_whitelist_account", "register_route_payid"]],
   ["Compliance requests (RFIs)", ["list_rfis", "list_customer_rfis", "get_rfi", "get_rfi_evidence_form", "submit_rfi_evidence", "get_kyc_capabilities"]],
   ["Documents", ["add_document", "list_documents", "get_document_download_url", "delete_document"]],
   ["Balances", ["get_balance", "get_balance_wallet", "create_balance_wallet", "list_balance_activity", "list_pending_balance_deposits", "list_whitelisted_wallets"]],
@@ -89,6 +90,16 @@ for (const [category, names] of CATEGORIES) {
     out.push(`${tool.description.trim()}\n`);
     out.push(table(tool.inputSchema));
   }
+}
+// Deprecated aliases are copies of a current tool: named once, not documented twice.
+const aliases = Object.entries(DEPRECATED_TOOL_ALIASES).filter(([alias]) => tools.has(alias));
+if (aliases.length) {
+  out.push(`### Deprecated names\n`);
+  out.push(
+    "These old names still work for one release and behave exactly like the tool they were renamed to. Move to the new name.\n"
+  );
+  out.push(aliases.map(([alias, current]) => `- \`${alias}\` → \`${current}\``).join("\n") + "\n");
+  for (const [alias] of aliases) seen.add(alias);
 }
 const unlisted = [...tools.keys()].filter((n) => !seen.has(n));
 if (unlisted.length) {

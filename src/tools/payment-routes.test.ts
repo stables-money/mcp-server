@@ -3,6 +3,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { StablesApiClient } from "../lib/stables-client.js";
 import { createStablesMcpServer } from "../server.js";
+import { DEPRECATED_TOOL_ALIASES } from "../tool-policy.js";
 
 const BENEFICIARY_ID = "6f1d2c3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f";
 const ROUTE_ID = "3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
@@ -50,7 +51,7 @@ describe("payment route tools", () => {
       new StablesApiClient("sti_test_unit_secret", "https://api.test.stables.money")
     );
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-    client = new Client({ name: "virtual-accounts-test", version: "0" });
+    client = new Client({ name: "payment-routes-test", version: "0" });
     await Promise.all([server.connect(serverSide), client.connect(clientSide)]);
   });
 
@@ -58,6 +59,33 @@ describe("payment route tools", () => {
 
   const sentBody = () => JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
   const text = (result: unknown) => JSON.stringify((result as { content: unknown }).content);
+
+  it("keeps the old virtual-account tool names as deprecated aliases", async () => {
+    const { tools } = await client.listTools();
+    const byName = new Map(tools.map((t) => [t.name, t]));
+    for (const [alias, current] of Object.entries(DEPRECATED_TOOL_ALIASES)) {
+      const aliasTool = byName.get(alias);
+      const currentTool = byName.get(current);
+      expect(currentTool, current).toBeDefined();
+      expect(aliasTool, alias).toBeDefined();
+      expect(aliasTool!.description).toMatch(new RegExp(`^Deprecated: renamed to ${current}`));
+      expect(aliasTool!.inputSchema).toEqual(currentTool!.inputSchema);
+      expect(aliasTool!.annotations).toEqual({
+        ...currentTool!.annotations,
+        title: `${currentTool!.annotations?.title} (deprecated name)`,
+      });
+    }
+
+    // An alias calls the same endpoint as the tool it points at.
+    const result = await client.callTool({
+      name: "get_virtual_account",
+      arguments: { customerId: "cus_1", virtualAccountId: ROUTE_ID },
+    });
+    expect(result.isError).toBeFalsy();
+    expect(fetchSpy.mock.calls[0][0]).toBe(
+      `https://api.test.stables.money/api/v1/customers/cus_1/payment-routes/${ROUTE_ID}`
+    );
+  });
 
   it("switches a route off with PUT .../status", async () => {
     fetchSpy.mockImplementationOnce(
@@ -73,12 +101,12 @@ describe("payment route tools", () => {
     );
 
     const result = await client.callTool({
-      name: "set_virtual_account_status",
+      name: "set_payment_route_status",
       arguments: { customerId: "cus_1", virtualAccountId: ROUTE_ID, status: "deactivated" },
     });
 
     expect(fetchSpy.mock.calls[0][0]).toBe(
-      `https://api.test.stables.money/api/v1/customers/cus_1/virtual-accounts/${ROUTE_ID}/status`
+      `https://api.test.stables.money/api/v1/customers/cus_1/payment-routes/${ROUTE_ID}/status`
     );
     expect((fetchSpy.mock.calls[0][1] as RequestInit).method).toBe("PUT");
     expect(sentBody()).toEqual({ status: "deactivated" });
@@ -88,7 +116,7 @@ describe("payment route tools", () => {
 
   it("creates an off-ramp route paying a saved beneficiary", async () => {
     const result = await client.callTool({
-      name: "create_virtual_account",
+      name: "create_payment_route",
       arguments: {
         customerId: "cus_1",
         workflowType: "crypto_to_fiat",
@@ -102,7 +130,7 @@ describe("payment route tools", () => {
 
     expect(result.isError).toBeFalsy();
     expect(fetchSpy.mock.calls[0][0]).toBe(
-      "https://api.test.stables.money/api/v1/customers/cus_1/virtual-accounts"
+      "https://api.test.stables.money/api/v1/customers/cus_1/payment-routes"
     );
     expect(sentBody()).toEqual({
       source: { currency: "USDT", network: "ethereum" },
@@ -115,7 +143,7 @@ describe("payment route tools", () => {
 
   it("creates an off-ramp route to a domestic bank account without a SWIFT code", async () => {
     const result = await client.callTool({
-      name: "create_virtual_account",
+      name: "create_payment_route",
       arguments: {
         customerId: "cus_1",
         workflowType: "crypto_to_fiat",
@@ -152,7 +180,7 @@ describe("payment route tools", () => {
 
   it("refuses a swift payout without swiftCode or bicCode, before calling the API", async () => {
     const result = await client.callTool({
-      name: "create_virtual_account",
+      name: "create_payment_route",
       arguments: {
         customerId: "cus_1",
         workflowType: "crypto_to_fiat",
@@ -174,7 +202,7 @@ describe("payment route tools", () => {
 
   it("refuses an off-ramp route without sourceNetwork", async () => {
     const result = await client.callTool({
-      name: "create_virtual_account",
+      name: "create_payment_route",
       arguments: {
         customerId: "cus_1",
         workflowType: "crypto_to_fiat",
@@ -191,14 +219,14 @@ describe("payment route tools", () => {
 
   it("keeps fiat_to_crypto as the default and requires its payout wallet", async () => {
     const refused = await client.callTool({
-      name: "create_virtual_account",
+      name: "create_payment_route",
       arguments: { customerId: "cus_1", sourceCurrency: "AUD" },
     });
     expect(refused.isError).toBe(true);
     expect(fetchSpy).not.toHaveBeenCalled();
 
     await client.callTool({
-      name: "create_virtual_account",
+      name: "create_payment_route",
       arguments: {
         customerId: "cus_1",
         sourceCurrency: "AUD",
@@ -213,24 +241,24 @@ describe("payment route tools", () => {
     });
   });
 
-  it("get_virtual_account reads one route and shows its deposit address", async () => {
+  it("get_payment_route reads one route and shows its deposit address", async () => {
     const result = await client.callTool({
-      name: "get_virtual_account",
+      name: "get_payment_route",
       arguments: { customerId: "cus_1", virtualAccountId: ROUTE_ID },
     });
 
     expect(result.isError).toBeFalsy();
     expect(fetchSpy.mock.calls[0][0]).toBe(
-      `https://api.test.stables.money/api/v1/customers/cus_1/virtual-accounts/${ROUTE_ID}`
+      `https://api.test.stables.money/api/v1/customers/cus_1/payment-routes/${ROUTE_ID}`
     );
     expect(text(result)).toContain("USDT on ethereum");
     expect(text(result)).toContain("Somchai Jaidee");
     expect(text(result)).not.toContain("undefined");
   });
 
-  it("get_virtual_account is labelled read-only", async () => {
+  it("get_payment_route is labelled read-only", async () => {
     const { tools } = await client.listTools();
-    const tool = tools.find((t) => t.name === "get_virtual_account");
+    const tool = tools.find((t) => t.name === "get_payment_route");
     expect(tool?.annotations?.readOnlyHint).toBe(true);
   });
 });

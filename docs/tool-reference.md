@@ -380,9 +380,9 @@ Archive a saved beneficiary. It leaves active listings and is refused as a trans
 
 ### Payment routes
 
-#### create_virtual_account
+#### create_payment_route
 
-Create a payment route for a customer. fiat_to_crypto (the default) issues a virtual bank account: fiat deposits convert to a stablecoin and pay out to a wallet, so destinationAddress and destinationPaymentRail are required. Set sourcePaymentRail to 'swift' for a SWIFT collection account: an IBAN that receives international SWIFT transfers, for business customers whose verification is approved and who hold the base_pay_in entitlement; it is not in the customer's name, and settles in USDT on Tron. crypto_to_fiat (an off-ramp route) issues a permanent USDT or USDC deposit address on sourceNetwork: every deposit converts and pays out to one bank account, given as a saved beneficiary (payoutType beneficiary + beneficiaryId) or as bank details. On a crypto_to_fiat route, swiftCode or bicCode is needed only when payoutNetwork is swift. Its deposits are route transactions, read with get_virtual_account_history, never transfers. Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_virtual_account.
+Create a payment route for a customer. fiat_to_crypto (the default) issues a virtual bank account: fiat deposits convert to a stablecoin and pay out to a wallet, so destinationAddress and destinationPaymentRail are required. Set sourcePaymentRail to 'swift' for a SWIFT collection account: an IBAN that receives international SWIFT transfers, for business customers whose verification is approved and who hold the base_pay_in entitlement; it is not in the customer's name, and settles in USDT on Tron. crypto_to_fiat (an off-ramp route) issues a permanent USDT or USDC deposit address on sourceNetwork: every deposit converts and pays out to one bank account, given as a saved beneficiary (payoutType beneficiary + beneficiaryId) or as bank details. On a crypto_to_fiat route, swiftCode or bicCode is needed only when payoutNetwork is swift. Its deposits are route transactions, read with get_payment_route_history, never transfers. Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_payment_route.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -425,54 +425,54 @@ Create a payment route for a customer. fiat_to_crypto (the default) issues a vir
 | `purposeCode` | `PAYMENT_FOR_SERVICES` \| `PAYMENT_FOR_SOFTWARE` \| `PAYMENT_FOR_IMPORTED_GOODS` \| `TRAVEL_SERVICES` \| `VENDOR_CONTRACTOR_PAYOUTS` \| `TRANSFER_TO_OWN_ACCOUNT` \| `INVESTMENT_IN_SHARES` \| `PURCHASE_OF_PROPERTY` \| `REPAYMENT_OF_LOANS` \| `SALARY` \| `PAYMENT_OF_PROPERTY_RENTAL` \| `INFORMATION_SERVICE_CHARGES` \| `ADVERTISING_PR_EXPENSES` \| `ROYALTY_FEES` \| `BROKER_COMMITMENT_FEES` \| `ADVISOR_TECHNICAL_FEES` \| `REPRESENTATIVE_OFFICE_EXPENSES` \| `TAX_PAYMENT` \| `TRANSPORTATION_FEES_FOR_GOODS` \| `CONSTRUCTION_COSTS` \| `INSURANCE_PREMIUM` \| `GENERAL_GOODS_TRADES` \| `INSURANCE_CLAIMS_PAYMENT` \| `FAMILY_MAINTENANCE` \| `EDUCATION_EXPENSES` \| `MEDICAL_TREATMENT` \| `DONATIONS` \| `MUTUAL_FUND_INVESTMENT` \| `CURRENCY_EXCHANGE` \| `USER_WITHDRAWAL` \| `ADVANCE_PAYMENTS_FOR_GOODS` \| `VENDOR_CONTRACTOR_SOFTWARE_PAYOUTS` \| `MERCHANT_SETTLEMENT` \| `REPATRIATION_FUND_SETTLEMENT` \| `PERSONAL_REMITTANCE` \| `RETURN_OF_FUNDS` | No | crypto_to_fiat only: the purpose every payout carries. Required where an off-ramp transfer to the same destination requires one |
 | `metadata` | object | No | Optional key-value data returned on the route |
 
-#### get_virtual_account
+#### get_payment_route
 
 Get one payment route by ID, including its deposit instructions (bank details, or an off-ramp route's deposit address) and payout destination
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID |
-| `virtualAccountId` | string | Yes | The payment route (virtual account) ID |
+| `virtualAccountId` | string | Yes | The payment route ID |
 
-#### list_virtual_accounts
+#### list_payment_routes
 
-List payment routes (virtual accounts) for one customer, or across every customer when customerId is omitted
+List payment routes for one customer, or across every customer when customerId is omitted
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | No | Only this customer's routes; omit to list routes across all customers |
-| `status` | `activated` \| `deactivated` \| `pending` \| `closed` | No | Filter by account status |
-| `limit` | number | No | Maximum number of accounts to return |
+| `status` | `activated` \| `deactivated` \| `pending` \| `closed` | No | Filter by route status |
+| `limit` | number | No | Maximum number of routes to return |
 | `startingAfter` | string | No | Return routes after this route ID (the last ID of the previous page) |
 
-#### update_virtual_account
+#### update_payment_route
 
-Update virtual account settings (e.g., deposit handling mode)
+Update a payment route's settings (e.g., deposit handling mode)
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID |
-| `virtualAccountId` | string | Yes | The virtual account ID to update |
+| `virtualAccountId` | string | Yes | The payment route ID to update |
 | `depositHandlingMode` | `auto_payout` \| `hold` \| `manual` | Yes | New deposit handling mode |
 
-#### set_virtual_account_status
+#### set_payment_route_status
 
 Deactivate a payment route so it stops accepting new deposits, or reactivate it. You can reactivate only a route your organization deactivated (deactivation_reason TENANT_REQUEST); a route Stables deactivated can only be reactivated by Stables support. Reactivating may charge the current month's account fee from the prefund balance if it has not been paid.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID |
-| `virtualAccountId` | string | Yes | The payment route (virtual account) ID |
+| `virtualAccountId` | string | Yes | The payment route ID |
 | `status` | `deactivated` \| `activated` | Yes | 'deactivated' to switch the route off, 'activated' to switch it back on |
 
-#### get_virtual_account_history
+#### get_payment_route_history
 
-Get the activity history for a virtual account (deposits, payouts, etc.)
+Get the activity history for a payment route: each deposit and the payout it triggered
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID |
-| `virtualAccountId` | string | Yes | The virtual account ID |
+| `virtualAccountId` | string | Yes | The payment route ID |
 | `limit` | number | No | Maximum number of events to return (default: 10) |
 
 #### update_route_destination
@@ -482,7 +482,7 @@ Change the payout wallet on an existing payment route. Deposits after this point
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID |
-| `virtualAccountId` | string | Yes | The payment route (virtual account) ID |
+| `virtualAccountId` | string | Yes | The payment route ID |
 | `destinationAddress` | string | Yes | New payout wallet address |
 | `destinationPaymentRail` | `arbitrum` \| `avalanche_c_chain` \| `base` \| `celo` \| `ethereum` \| `optimism` \| `polygon` \| `solana` \| `stellar` \| `tron` | Yes | Blockchain network the new address belongs to |
 | `destinationCurrency` | `usdc` \| `usdt` \| `dai` \| `pyusd` \| `eurc` | No | Stablecoin to receive. Default: `"usdt"`. |
@@ -494,7 +494,7 @@ List the bank accounts whitelisted to pay into an AUD payment route. Some Austra
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID |
-| `virtualAccountId` | string | Yes | The AUD payment route (virtual account) ID |
+| `virtualAccountId` | string | Yes | The AUD payment route ID |
 
 #### add_route_whitelist_account
 
@@ -503,7 +503,7 @@ Whitelist an Australian bank account (BSB and account number) to pay into an AUD
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID |
-| `virtualAccountId` | string | Yes | The AUD payment route (virtual account) ID |
+| `virtualAccountId` | string | Yes | The AUD payment route ID |
 | `bsbNumber` | string | Yes | Source account BSB |
 | `accountNumber` | string | Yes | Source account number |
 | `enabled` | boolean | No | Whether deposits from it are accepted now. Default: `true`. |
@@ -515,7 +515,7 @@ Change or disable a whitelisted source account on an AUD payment route. Send the
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID |
-| `virtualAccountId` | string | Yes | The AUD payment route (virtual account) ID |
+| `virtualAccountId` | string | Yes | The AUD payment route ID |
 | `sourceAccountId` | integer | Yes | The whitelist entry ID (from list_route_whitelist) |
 | `bsbNumber` | string | Yes | Source account BSB |
 | `accountNumber` | string | Yes | Source account number |
@@ -528,7 +528,7 @@ Register a PayID for an activated AUD payment route, so payers can send to an em
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID |
-| `virtualAccountId` | string | Yes | The AUD payment route (virtual account) ID |
+| `virtualAccountId` | string | Yes | The AUD payment route ID |
 
 ### Compliance requests (RFIs)
 
@@ -600,7 +600,7 @@ Attach a supporting document (invoice, contract or other) to a transfer or a pay
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `on` | `transfer` \| `deposit` | Yes | What the document belongs to: a transfer, or a deposit on a payment route |
-| `transactionId` | string | Yes | The transfer ID, or the deposit ID from get_virtual_account_history |
+| `transactionId` | string | Yes | The transfer ID, or the deposit ID from get_payment_route_history |
 | `fileName` | string | Yes | File name shown to Stables, e.g. 'invoice-2041.pdf' |
 | `base64Url` | string | Yes | The file as a data URL: 'data:<mime>;base64,<data>' |
 | `type` | `invoice` \| `contract` \| `other` | No | What the document is (default other) |
@@ -612,7 +612,7 @@ List the documents attached to a transfer or a payment route deposit, newest fir
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `on` | `transfer` \| `deposit` | Yes | What the document belongs to: a transfer, or a deposit on a payment route |
-| `transactionId` | string | Yes | The transfer ID, or the deposit ID from get_virtual_account_history |
+| `transactionId` | string | Yes | The transfer ID, or the deposit ID from get_payment_route_history |
 
 #### get_document_download_url
 
@@ -621,7 +621,7 @@ Get a short-lived link to download a document attached to a transfer or a paymen
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `on` | `transfer` \| `deposit` | Yes | What the document belongs to: a transfer, or a deposit on a payment route |
-| `transactionId` | string | Yes | The transfer ID, or the deposit ID from get_virtual_account_history |
+| `transactionId` | string | Yes | The transfer ID, or the deposit ID from get_payment_route_history |
 | `documentId` | string | Yes | The document ID from list_documents |
 
 #### delete_document
@@ -631,7 +631,7 @@ Remove a document from a transfer or a payment route deposit. This cannot be und
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `on` | `transfer` \| `deposit` | Yes | What the document belongs to: a transfer, or a deposit on a payment route |
-| `transactionId` | string | Yes | The transfer ID, or the deposit ID from get_virtual_account_history |
+| `transactionId` | string | Yes | The transfer ID, or the deposit ID from get_payment_route_history |
 | `documentId` | string | Yes | The document ID from list_documents |
 
 ### Balances
@@ -717,7 +717,7 @@ SANDBOX ONLY. Simulate a deposit into a payment route so you can watch the conve
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID |
-| `virtualAccountId` | string | Yes | The payment route (virtual account) ID |
+| `virtualAccountId` | string | Yes | The payment route ID |
 | `amount` | string | Yes | Deposit amount in major units of the route's source currency (e.g. '500.00') |
 | `scenario` | `create_only` \| `completed` \| `failed` | No | 'completed' runs the deposit through to payout, 'failed' exercises the failure path, 'create_only' stops at the deposit. Off-ramp routes take 'completed' only |
 | `senderName` | string | No | Name to attribute the deposit to (fiat routes) |
@@ -819,3 +819,14 @@ List recent webhook delivery attempts with their HTTP status and retry state. Th
 | `pageSize` | number | No | How many attempts to return (default 10, max 50) |
 | `status` | `PENDING` \| `SUCCESS` \| `FAILED` \| `RETRYING` | No | Filter by delivery status |
 | `eventType` | string | No | Filter by event type (e.g. 'transfer.created') |
+
+### Deprecated names
+
+These old names still work for one release and behave exactly like the tool they were renamed to. Move to the new name.
+
+- `create_virtual_account` → `create_payment_route`
+- `get_virtual_account` → `get_payment_route`
+- `list_virtual_accounts` → `list_payment_routes`
+- `update_virtual_account` → `update_payment_route`
+- `set_virtual_account_status` → `set_payment_route_status`
+- `get_virtual_account_history` → `get_payment_route_history`
