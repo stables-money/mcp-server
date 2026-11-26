@@ -12,7 +12,12 @@ import type {
   VirtualAccountDepositInstructions,
 } from "../lib/stables-client.js";
 import { StablesApiClient } from "../lib/stables-client.js";
-import { PURPOSE_CODES, bankDestinationShape, buildBankDestination } from "./transfers.js";
+import {
+  PAYOUT_NETWORKS,
+  PURPOSE_CODES,
+  bankDestinationShape,
+  buildBankDestination,
+} from "./transfers.js";
 
 const NETWORKS = [
   "arbitrum",
@@ -25,22 +30,6 @@ const NETWORKS = [
   "solana",
   "stellar",
   "tron",
-] as const;
-
-const PAYOUT_NETWORKS = [
-  "swift",
-  "bank",
-  "payid",
-  "mobile_money",
-  "ach",
-  "fedwire",
-  "fps",
-  "chaps",
-  "sepa",
-  "sepa_instant",
-  "fast",
-  "chats",
-  "unionpay",
 ] as const;
 
 function isCryptoInstructions(
@@ -212,7 +201,9 @@ export function registerPaymentRouteTools(server: McpServer, client: StablesApiC
             }
             fiatDestination = { type: "beneficiary", beneficiary_id: input.beneficiaryId };
           } else {
-            if (!input.accountNumber && !input.iban) {
+            // A mobile money wallet has no account number; buildBankDestination checks it instead.
+            const wallet = input.walletProvider || input.walletAccount;
+            if (!wallet && !input.accountNumber && !input.iban) {
               throw new Error("Bank details need accountNumber or iban");
             }
             if (input.payoutNetwork === "swift" && !input.swiftCode && !input.bicCode) {
@@ -675,7 +666,8 @@ Status: ${account.status}`,
                   }`
                 : "";
             const sender = e.sender_name ? ` from ${e.sender_name}` : "";
-            return `- ${when}: deposit ${deposit}${sender}${payout}`;
+            const failure = e.failure ? ` (failed: ${e.failure.code}, ${e.failure.message})` : "";
+            return `- ${when}: deposit ${deposit}${sender}${payout}${failure}`;
           })
           .join("\n");
 

@@ -291,25 +291,82 @@ export type TransferStatus =
   | "failed"
   | "cancelled"
   | "expired"
+  | "refund_pending"
+  | "refunded"
+  | "refund_failed"
   | "unknown";
 
-/** ISO 3166-1 alpha-2, lowercase, per AddressApiSchema. */
+/**
+ * How a fiat payout is delivered. `bank` is the default domestic scheme; a named scheme (ach
+ * through unionpay) is refused where it cannot be chosen.
+ */
+export type PayoutNetwork =
+  | "swift"
+  | "bank"
+  | "payid"
+  | "mobile_money"
+  | "ach"
+  | "fedwire"
+  | "fps"
+  | "chaps"
+  | "sepa"
+  | "sepa_instant"
+  | "fast"
+  | "chats"
+  | "unionpay";
+
+/** Networks a beneficiary can be saved on. PayID aliases are paid per transfer, never stored. */
+export type BeneficiaryNetwork = "bank" | "swift" | "mobile_money" | "unionpay";
+
+/**
+ * A payout address, per PayoutAddressApiSchema: street and country are always needed, the rest
+ * only where the corridor asks. Country is ISO 3166-1 alpha-2.
+ */
 export interface BeneficiaryAddress {
   street: string;
-  city: string;
-  state: string;
-  postal_code: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
   country: string;
+}
+
+/** Goods a payout pays for. Belongs to one payout, so it is never saved on a beneficiary. */
+export interface TransferItem {
+  name: string;
+  quantity: number;
+  unit_price: string;
+  description?: string;
+}
+
+export interface LogisticsTrackingDetail {
+  tracking_number?: string;
+  logistics_provider?: { name?: string; code?: string };
+}
+
+export interface PayoutDocument {
+  type: "invoice" | "contract" | "other";
+  /** A data URI, e.g. data:application/pdf;base64,... */
+  base64_url: string;
+}
+
+/** Supporting details that travel with one payout, on a bank or a beneficiary destination. */
+export interface PayoutExtras {
+  logistics_tracking_details?: LogisticsTrackingDetail[];
+  items?: TransferItem[];
+  documents?: PayoutDocument[];
 }
 
 /**
  * Bank payout destination. Bank codes are flat here — the nested `bankCodes`
- * object the API used to take is gone.
+ * object the API used to take is gone. A mobile money wallet uses the same
+ * shape with `wallet_provider` and `wallet_account` in place of every bank field.
  */
-export interface BankTransferDestination {
+export interface BankTransferDestination extends PayoutExtras {
   type: "bank";
   account_holder_name: string;
-  bank_name: string;
+  /** Required for every network except mobile_money. */
+  bank_name?: string;
+  /** For mobile_money, the country of the wallet. */
   bank_country: string;
   currency: string;
   /**
@@ -318,17 +375,28 @@ export interface BankTransferDestination {
    */
   recipient_type?: "individual" | "business";
   date_of_birth?: string;
+  /** E.164. */
+  phone?: string;
   address?: BeneficiaryAddress;
+  /** Address of the beneficiary's bank. */
+  bank_address?: BeneficiaryAddress;
   account_number?: string;
   iban?: string;
   pay_id?: string;
   pay_id_type?: "email" | "phone_number" | "abn" | "acn" | "organisation_id";
+  /** Mobile money: the wallet provider code. Requires `wallet_account`. */
+  wallet_provider?: string;
+  /** Mobile money: the wallet's identifier, e.g. its mobile number. */
+  wallet_account?: string;
+  wallet_account_type?: "mobile_number";
   account_type?: "savings" | "checking" | "payment";
   branch_name?: string;
   swift_code?: string;
   bic_code?: string;
   ifsc_code?: string;
   aba_code?: string;
+  /** USD payouts only. */
+  payment_rail?: "ach" | "wire";
   sort_code?: string;
   branch_code?: string;
   bsb_code?: string;
@@ -360,7 +428,7 @@ export interface CryptoTransferDestination {
  * One of the organisation's saved beneficiaries, which supplies the recipient
  * and bank details. The transfer is still made for the request's customer_id.
  */
-export interface BeneficiaryTransferDestination {
+export interface BeneficiaryTransferDestination extends PayoutExtras {
   type: "beneficiary";
   beneficiary_id: string;
 }
@@ -371,8 +439,8 @@ export interface Beneficiary {
   /** Organisation-chosen display name. */
   label: string | null;
   status: "active" | "archived";
-  network: "bank" | "swift" | "payid";
-  destination: Omit<BankTransferDestination, "pay_id" | "pay_id_type"> & { phone?: string };
+  network: PayoutNetwork;
+  destination: Omit<BankTransferDestination, "pay_id" | "pay_id_type" | keyof PayoutExtras>;
   /** Whether the saved details still pass today's payout rules. */
   validation: ValidatePaymentMethodResponse;
   last_used_at: string | null;
@@ -382,7 +450,7 @@ export interface Beneficiary {
 }
 
 export interface CreateBeneficiaryRequest {
-  network: "bank" | "swift";
+  network: BeneficiaryNetwork;
   label?: string;
   destination: BankTransferDestination;
 }
@@ -406,6 +474,58 @@ export interface SourceDepositInstructions {
   [key: string]: unknown;
 }
 
+/** A tracking record the payout supplied: a SWIFT UETR (`data.number`) or MT103 (`data.file`). */
+export interface TransferTracking {
+  type: string;
+  data: {
+    number?: string;
+    file?: { type: string; name: string; content: string; media_type: string };
+  };
+}
+
+/** Why a transfer is held and what is still outstanding before it resumes. */
+export interface TransferComplianceHold {
+  rfi_id: string;
+  reasons: { reason_code: string; description: string }[];
+  requirements: {
+    type: "KYC_CAPABILITY" | "KYC_LEVEL" | "MANUAL_REVIEW" | "EVIDENCE";
+    required_capability?: string;
+    required_level?: string;
+    suggested_level?: string;
+    required_evidence?: string;
+    requirement_id?: string;
+    status: "missing" | "submitted" | "satisfied";
+  }[];
+}
+
+export interface TransferRefund {
+  status: "requested" | "broadcasting" | "processing" | "refunded" | "failed";
+  /** Gross amount returned before fees. */
+  amount: string;
+  fee: string;
+  /** Amount delivered to the refund destination. */
+  net: string;
+  currency: string;
+  destination:
+    | { type: "prefund_wallet"; network: string; address: string }
+    | { type: "original_source"; currency: string }
+    | { type: "bank_account"; provider: string; account_masked: string };
+  tx_hash?: string;
+  provider_reference?: string;
+  requested_at: string;
+  completed_at?: string;
+  failed_at?: string;
+}
+
+/** Custody of the wallet the customer sends from, for the travel rule. Absent = self_hosted. */
+export interface TransferSourceWallet {
+  type: "hosted" | "self_hosted";
+  vasp_id?: string;
+  vasp_name?: string;
+}
+
+export type AccountOwnership = "first_party" | "third_party";
+
 export interface Transfer {
   id: string;
   tenant_id: string;
@@ -421,6 +541,12 @@ export interface Transfer {
   fees?: Record<string, unknown>;
   exchange_rate?: string;
   metadata?: Record<string, string>;
+  /** SWIFT payouts only: the UETR, then the MT103 once issued. */
+  tracking?: TransferTracking[];
+  payment_reference?: string;
+  account_ownership?: AccountOwnership;
+  compliance_hold?: TransferComplianceHold;
+  refund?: TransferRefund | null;
 }
 
 export interface CreateTransferRequest {
@@ -428,6 +554,10 @@ export interface CreateTransferRequest {
   quote_id: string;
   destination: TransferDestination;
   purpose_code?: string;
+  /** Text sent with a bank payout for the recipient, such as an invoice number. */
+  payment_reference?: string;
+  account_ownership?: AccountOwnership;
+  source_wallet?: TransferSourceWallet;
   funding_source?: "fund_transfer" | "prefund_balance";
   metadata?: Record<string, string>;
 }
@@ -570,6 +700,8 @@ export interface VirtualAccountHistoryEvent {
   platform_fee_currency?: string;
   deposited_at?: string;
   created_at?: string;
+  /** Why the deposit was not paid out, when it was not. */
+  failure?: { code: string; message: string };
 }
 
 /** The envelope is `{data, has_more}` — there is no `count`. */
@@ -790,17 +922,24 @@ export interface CreateQuoteRequest {
     currency: string;
     /** Required for offramp and swap (crypto source); omitted for onramp (fiat source). */
     network?: string;
-    amount: string;
+    /** Exactly one of this and `destination.amount`. */
+    amount?: string;
   };
   destination: {
     currency: string;
     /** Required for offramp. */
     country?: string;
-    /** Offramp: payment network (swift/bank). Onramp and swap: blockchain network. */
+    /** Offramp: payout network (a PayoutNetwork). Onramp and swap: blockchain network. */
     network?: string;
     /** Required for onramp. */
     address?: string;
+    /** Exact destination amount, on routes that support exact-out. */
+    amount?: string;
   };
+  /** How the transfer made from this quote will be funded. Defaults to fund_transfer. */
+  funding_source?: "fund_transfer" | "prefund_balance";
+  /** Prices only the payout routes this customer can use. */
+  customer_id?: string;
   /** Price without persisting the quote. Returns status "preview". */
   preview?: boolean;
   metadata?: Record<string, string>;
@@ -1331,15 +1470,21 @@ export class StablesApiClient {
    * discover what a corridor demands before spending a short-lived quote.
    */
   async validatePaymentMethod(
-    network: "swift" | "bank" | "payid",
+    network: PayoutNetwork,
     destination: BankTransferDestination,
-    quoteId?: string
+    quoteId?: string,
+    purposeCode?: string
   ): Promise<ValidatePaymentMethodResponse> {
     return this.requestWithRetry<ValidatePaymentMethodResponse>(
       "/api/v1/payment-methods/validate",
       {
         method: "POST",
-        body: JSON.stringify({ network, destination, ...(quoteId && { quote_id: quoteId }) }),
+        body: JSON.stringify({
+          network,
+          destination,
+          ...(quoteId && { quote_id: quoteId }),
+          ...(purposeCode && { purpose_code: purposeCode }),
+        }),
       }
     );
   }

@@ -10,7 +10,7 @@ MCP (Model Context Protocol) is an open standard that provides a standardized wa
 
 ## Features
 
-This MCP server provides 57 tools across 12 categories, one for every operation documented on [docs.stables.money](https://docs.stables.money)(a contract test checks this, see below):
+This MCP server provides 61 tools across 13 categories, one for every operation documented on [docs.stables.money](https://docs.stables.money)(a contract test checks this, see below):
 
 ### Customer Management
 - `create_customer` - Create individual or business customers
@@ -41,19 +41,19 @@ This MCP server provides 57 tools across 12 categories, one for every operation 
 - `delete_document` - Remove a document
 
 ### Quotes
-- `create_quote` - Get quotes: a stablecoin to fiat, or a swap between stablecoins and networks
+- `create_quote` - Get quotes: a stablecoin to fiat on a chosen payout network (bank, SWIFT, PayID, mobile money or a named domestic scheme), by source amount or exact destination amount, or a swap between stablecoins and networks
 - `get_quote` - Check quote status and details
 
 ### Transfers
 - `validate_payment_method` - Check payout details against a corridor's rules before transferring
-- `create_transfer` - Execute a transfer using an active quote: a bank payout paid by deposit or from your balance, or a swap delivered to a wallet
-- `get_transfer` - Check transfer status
+- `create_transfer` - Execute a transfer using an active quote: a bank or mobile money payout paid by deposit or from your balance, or a swap delivered to a wallet
+- `get_transfer` - Check transfer status, payout tracking, compliance holds and refunds
 - `list_transfers` - List transfers with filters
 
 ### Saved Beneficiaries
 - `list_beneficiaries` - Saved recipients and bank accounts, to pay by id with `create_transfer`
 - `get_beneficiary` - One beneficiary's details and whether it still passes today's payout rules
-- `create_beneficiary` - Save a recipient and bank account (validated like a transfer)
+- `create_beneficiary` - Save a recipient and bank account or mobile money wallet (validated like a transfer)
 - `archive_beneficiary` - Archive a beneficiary so it can no longer be paid
 
 ### Payment Routes
@@ -76,9 +76,15 @@ The old names (`create_virtual_account`, `get_virtual_account`, `list_virtual_ac
 - `list_pending_balance_deposits` - Deposits held before crediting, and why
 - `list_whitelisted_wallets` - Wallets allowed to fund the balance
 
+### Developer Fee
+- `get_developer_fee` - What you charge your customers on top of Stables' fees
+- `set_developer_fee` - Set or change your developer fee (a percent, a fixed amount, or both)
+- `remove_developer_fee` - Stop charging a developer fee on new transactions
+
 ### Sandbox
 - `simulate_route_deposit` - Simulate a fiat deposit into a payment route (sandbox only)
 - `simulate_transfer_deposit` - Simulate the inbound crypto an off-ramp transfer awaits (sandbox only)
+- `simulate_balance_deposit` - Simulate a stablecoin deposit into your balance wallet (sandbox only)
 
 ### API Keys
 - `create_api_key` - Create a new API key
@@ -423,16 +429,24 @@ Update customer metadata key-value pairs.
 ### Quote Tools
 
 #### create_quote
-Get a quote for currency exchange (crypto to fiat).
+Get a quote: a stablecoin to fiat (off-ramp), fiat to a stablecoin (on-ramp), or a swap between stablecoins and networks.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| fromCurrency | "USDC" \| "USDT" | Yes | Source cryptocurrency |
-| fromAmount | string | Yes | Amount to convert |
-| fromNetwork | "ethereum" \| "polygon" \| "polygon-amoy" | Yes | Blockchain network |
-| toCurrency | string | Yes | Destination currency (e.g., "EUR") |
-| toCountry | string | Yes | Destination country code (e.g., "GR") |
-| paymentMethodType | "SWIFT" \| "LOCAL" | Yes | Payment method for payout |
+| sourceCurrency | string | Yes | Source currency (e.g., "USDT") |
+| sourceAmount | string | No | Amount to convert. Give exactly one of sourceAmount and destinationAmount |
+| sourceNetwork | string | No | Blockchain network of the source. Required for off-ramp and swap |
+| destinationCurrency | string | Yes | Destination currency (e.g., "EUR") |
+| destinationCountry | string | No | Destination country code (e.g., "GR"). Required for off-ramp |
+| destinationNetwork | string | No | Off-ramp: payout network ("bank", "swift", "payid", "mobile_money", or a named scheme: "ach", "fedwire", "fps", "chaps", "sepa", "sepa_instant", "fast", "chats", "unionpay"). On-ramp and swap: blockchain network |
+| destinationAddress | string | No | Destination wallet address. Required for on-ramp |
+| destinationAmount | string | No | Exact amount to be received, instead of sourceAmount, where the route supports it |
+| customerId | string | No | Customer the quote is for |
+| fundingSource | "fund_transfer" \| "prefund_balance" | No | How the transfer will be funded. Defaults to fund_transfer |
+| preview | boolean | No | Price without persisting the quote |
+| metadata | object | No | Optional key-value pairs |
+
+The tables in this section are a summary. The full, generated reference for every tool is in [docs/tool-reference.md](docs/tool-reference.md).
 
 #### get_quote
 Get quote details.

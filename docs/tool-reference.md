@@ -193,17 +193,20 @@ Send further verification data Stables asked for on a requested entitlement. The
 
 #### create_quote
 
-Get a quote for a currency exchange: the rate, the fees, and what the customer receives. Quotes are short-lived, so create one immediately before the transfer. Off-ramp converts a stablecoin to fiat (source network required, destination country required); on-ramp converts fiat to a stablecoin (destination address required). A swap converts a stablecoin to another stablecoin and/or moves it to another network: USDT or USDC on both sides, sourceNetwork and destinationNetwork both blockchain networks, no destinationCountry. The same stablecoin on the same network is refused. Set preview to price without committing.
+Get a quote for a currency exchange: the rate, the fees, and what the customer receives. Quotes are short-lived, so create one immediately before the transfer. Off-ramp converts a stablecoin to fiat (source network required, destination country required); on-ramp converts fiat to a stablecoin (destination address required). A swap converts a stablecoin to another stablecoin and/or moves it to another network: USDT or USDC on both sides, sourceNetwork and destinationNetwork both blockchain networks, no destinationCountry. The same stablecoin on the same network is refused. Give sourceAmount to quote what a fixed amount buys, or destinationAmount to quote what an exact amount received costs (only on routes that support it); never both. Set preview to price without committing.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `sourceCurrency` | string | Yes | Source currency: a stablecoin for off-ramp or swap (e.g. 'USDT'), fiat for on-ramp |
-| `sourceAmount` | string | Yes | Amount to convert, in major units (e.g. '125.75') |
+| `sourceAmount` | string | No | Amount to convert, in major units (e.g. '125.75'). Give exactly one of sourceAmount and destinationAmount |
 | `sourceNetwork` | `arbitrum` \| `avalanche` \| `base` \| `ethereum` \| `optimism` \| `polygon` \| `solana` \| `tron` | No | Blockchain network of the source. Required for off-ramp and swap, omitted for on-ramp |
 | `destinationCurrency` | string | Yes | Destination currency: fiat for off-ramp (e.g. 'EUR'), a stablecoin for on-ramp or swap (e.g. 'USDC') |
 | `destinationCountry` | string | No | Destination country, ISO 2-letter. Required for off-ramp |
-| `destinationNetwork` | string | No | Off-ramp: payment network, 'swift' or 'bank'. On-ramp and swap: the blockchain network to deliver on (required for a swap, e.g. 'base'). Replaces the old paymentMethodType |
+| `destinationNetwork` | string | No | Off-ramp: the payout network. bank = the default domestic scheme, swift = international wire, payid = PayID alias (AUD), mobile_money = a mobile money wallet (needs walletProvider and walletAccount, and no bank fields). A named domestic scheme (ach, fedwire, fps, chaps, sepa, sepa_instant, fast, chats, unionpay) is refused where it is unavailable for the corridor. unionpay = personal remittance to a bank account in mainland China in CNY: purposeCode PERSONAL_REMITTANCE or USER_WITHDRAWAL, and the customer needs the cny_unionpay entitlement. On-ramp and swap: the blockchain network to deliver on (required for a swap, e.g. 'base') |
+| `destinationAmount` | string | No | Exact amount the recipient must receive, in major units (e.g. '100'), instead of sourceAmount. The quote then says what to send. Refused on routes that do not support an exact destination amount |
 | `destinationAddress` | string | No | Destination wallet address. Required for on-ramp |
+| `customerId` | string | No | The customer the quote is for. With it, the quote also uses payout routes that need the customer to be set up first, and the transfer must then be created for the same customer. Without it, only routes that need no customer set-up are used |
+| `fundingSource` | `fund_transfer` \| `prefund_balance` | No | How the transfer made from this quote will be funded. fund_transfer (default): a deposit for that transfer. prefund_balance prices the quote for payment from your organisation's balance, and the transfer must then use the same fundingSource. Quoting moves no money, but a prefund_balance transfer debits the balance and starts the payout immediately, so it needs explicit human approval |
 | `preview` | boolean | No | Price the quote without persisting it, to show an estimate |
 | `metadata` | object | No | Optional metadata |
 
@@ -219,28 +222,42 @@ Get details about an existing quote including its current status
 
 #### validate_payment_method
 
-Check bank payout details against the corridor's rules without creating anything. Use it before create_transfer to find out which fields a currency needs (beneficiary address, date of birth, bank codes), instead of spending a short-lived quote on a rejected transfer.
+Check payout details (a bank account or a mobile money wallet) against the corridor's rules without creating anything. Use it before create_transfer to find out which fields a currency and network need (beneficiary address, date of birth, bank codes, wallet details), instead of spending a short-lived quote on a rejected transfer. Networks: bank = the default domestic scheme, swift = international wire, payid = PayID alias (AUD), mobile_money = a mobile money wallet (needs walletProvider and walletAccount, and no bank fields). A named domestic scheme (ach, fedwire, fps, chaps, sepa, sepa_instant, fast, chats, unionpay) is refused where it is unavailable for the corridor. unionpay = personal remittance to a bank account in mainland China in CNY: purposeCode PERSONAL_REMITTANCE or USER_WITHDRAWAL, and the customer needs the cny_unionpay entitlement. A CNY bank payout needs nameInLocalLanguage and nationalIdentificationNumber, and for goods trade (purposeCode GENERAL_GOODS_TRADES) logisticsTrackingDetails and items.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `network` | `bank` \| `swift` \| `payid` | Yes | Payout network: local bank rails, SWIFT, or PayID (AUD) |
+| `network` | `swift` \| `bank` \| `payid` \| `mobile_money` \| `ach` \| `fedwire` \| `fps` \| `chaps` \| `sepa` \| `sepa_instant` \| `fast` \| `chats` \| `unionpay` | Yes | Payout network to validate against: bank (default domestic scheme), swift, payid (AUD), mobile_money, or a named domestic scheme |
 | `quoteId` | string | No | Validate against this quote's corridor |
+| `purposeCode` | `PAYMENT_FOR_SERVICES` \| `PAYMENT_FOR_SOFTWARE` \| `PAYMENT_FOR_IMPORTED_GOODS` \| `TRAVEL_SERVICES` \| `VENDOR_CONTRACTOR_PAYOUTS` \| `TRANSFER_TO_OWN_ACCOUNT` \| `INVESTMENT_IN_SHARES` \| `PURCHASE_OF_PROPERTY` \| `REPAYMENT_OF_LOANS` \| `SALARY` \| `PAYMENT_OF_PROPERTY_RENTAL` \| `INFORMATION_SERVICE_CHARGES` \| `ADVERTISING_PR_EXPENSES` \| `ROYALTY_FEES` \| `BROKER_COMMITMENT_FEES` \| `ADVISOR_TECHNICAL_FEES` \| `REPRESENTATIVE_OFFICE_EXPENSES` \| `TAX_PAYMENT` \| `TRANSPORTATION_FEES_FOR_GOODS` \| `CONSTRUCTION_COSTS` \| `INSURANCE_PREMIUM` \| `GENERAL_GOODS_TRADES` \| `INSURANCE_CLAIMS_PAYMENT` \| `FAMILY_MAINTENANCE` \| `EDUCATION_EXPENSES` \| `MEDICAL_TREATMENT` \| `DONATIONS` \| `MUTUAL_FUND_INVESTMENT` \| `CURRENCY_EXCHANGE` \| `USER_WITHDRAWAL` \| `ADVANCE_PAYMENTS_FOR_GOODS` \| `VENDOR_CONTRACTOR_SOFTWARE_PAYOUTS` \| `MERCHANT_SETTLEMENT` \| `REPATRIATION_FUND_SETTLEMENT` \| `PERSONAL_REMITTANCE` \| `RETURN_OF_FUNDS` | No | The purpose the transfer will carry. Some corridors ask for different supporting details per purpose (CNY: logisticsTrackingDetails and items for goods trade, a document for services); without it every such detail is required |
 | `accountHolderName` | string | No | Account holder's full name, or the company name when recipientType is business |
-| `bankName` | string | No | Name of the destination bank |
-| `bankCountry` | string | No | Bank country, ISO 2-letter (e.g. 'AU', 'US') |
+| `bankName` | string | No | Name of the destination bank. Required unless paying a mobile money wallet |
+| `bankCountry` | string | No | Bank country, ISO 2-letter (e.g. 'AU', 'US'). For mobile money, the country of the wallet |
 | `bankCurrency` | string | No | Payout currency, ISO 3-letter (e.g. 'EUR') |
 | `recipientType` | `individual` \| `business` | No | Beneficiary type. Required for AED, CAD, EUR, GBP, MXN, USD |
 | `dateOfBirth` | string | No | Beneficiary date of birth, YYYY-MM-DD. Required when recipientType is individual for AED, CAD, EUR, GBP, MXN, USD |
-| `addressStreet` | string | No | Beneficiary street address |
+| `phone` | string | No | Beneficiary phone number in E.164 format (e.g. '+5215512345678') |
+| `nameInLocalLanguage` | string | No | Account holder name in the local language (e.g. Chinese characters for CNY) |
+| `nationalIdentificationNumber` | string | No | National identification number of the account holder |
+| `addressStreet` | string | No | Beneficiary street address. Needed, with addressCountry, whenever an address is sent |
 | `addressCity` | string | No | Beneficiary city |
 | `addressState` | string | No | Beneficiary state or region |
 | `addressPostalCode` | string | No | Beneficiary postal code |
 | `addressCountry` | string | No | Beneficiary country, ISO 2-letter. The complete address is required for AED, CAD, EUR, GBP, MXN, USD |
+| `bankAddressStreet` | string | No | Street address of the beneficiary's bank. A bank address is required for a USD SWIFT payout to an account the paying customer does not hold; street and country at minimum |
+| `bankAddressCity` | string | No | City of the beneficiary's bank |
+| `bankAddressState` | string | No | State or region of the beneficiary's bank |
+| `bankAddressPostalCode` | string | No | Postal code of the beneficiary's bank |
+| `bankAddressCountry` | string | No | Country of the beneficiary's bank, ISO 2-letter |
+| `walletProvider` | string | No | Mobile money only: the wallet provider code, as listed for the corridor (e.g. 'mtn_gh'). Requires walletAccount, and every bank field (bankName, accountNumber, iban, bank codes) must be left out |
+| `walletAccount` | string | No | Mobile money only: the wallet's identifier, such as its mobile number (e.g. '+233241234567'). Required with walletProvider |
+| `walletAccountType` | `mobile_number` | No | Mobile money only: the kind of identifier in walletAccount. Only needed where the wallet provider accepts more than one |
 | `iban` | string | No | IBAN (EU/international) |
 | `accountNumber` | string | No | Bank account number, if not using IBAN |
 | `accountType` | `savings` \| `checking` \| `payment` | No | Account type. Required for CAD and USD bank payouts |
 | `payId` | string | No | PayID alias (AUD only). Requires payIdType |
 | `payIdType` | `email` \| `phone_number` \| `abn` \| `acn` \| `organisation_id` | No | PayID alias type. Required when payId is given |
+| `branchName` | string | No | Bank branch name |
+| `paymentRail` | `ach` \| `wire` | No | USD payouts only: prefer ACH or wire. Omit for the account's default. A rail that is not available is refused |
 | `swiftCode` | string | No | SWIFT code |
 | `bicCode` | string | No | BIC (EUR/GBP international) |
 | `routingNumber` | string | No | ABA routing number (US) |
@@ -250,33 +267,49 @@ Check bank payout details against the corridor's rules without creating anything
 | `bankCode` | string | No | Bank code / institution number (CAD) |
 | `branchCode` | string | No | Branch code / transit number (CAD) |
 | `cnaps` | string | No | CNAPS (China) |
+| `logisticsTrackingDetails` | object[] | No | Shipment tracking for the goods the payout pays for. Required, with items, for a CNY bank payout with purposeCode GENERAL_GOODS_TRADES |
+| `items` | object[] | No | Goods the payout pays for, as invoice lines. Required, with logisticsTrackingDetails, for a CNY bank payout with purposeCode GENERAL_GOODS_TRADES |
+| `documents` | object[] | No | Supporting documents for the payout, such as an invoice or contract |
 
 #### create_transfer
 
-Create a transfer from an active quote. The quote must not be expired. With fundingSource fund_transfer (the default) this only creates the transfer and returns deposit instructions; no money moves until someone deposits the funds. With prefund_balance it debits your organisation's balance and starts the payout immediately, so this moves real money: get explicit human approval first. For payouts in AED, CAD, EUR, GBP, MXN, USD you must also supply recipientType, the full beneficiary address, and dateOfBirth when the recipient is an individual. To pay one of the organisation's saved beneficiaries, set destinationType to beneficiary and pass its beneficiaryId instead of bank details. For a swap (a quote between two stablecoins or two networks), set destinationType to crypto with destinationCurrency, destinationNetwork and destinationAddress; currency and network must match the quote. A swap is funded by a deposit (fund_transfer) and needs no bank details or purposeCode.
+Create a transfer from an active quote. The quote must not be expired. With fundingSource fund_transfer (the default) this only creates the transfer and returns deposit instructions; no money moves until someone deposits the funds. With prefund_balance it debits your organisation's balance and starts the payout immediately, so this moves real money: get explicit human approval first. For payouts in AED, CAD, EUR, GBP, MXN, USD you must also supply recipientType, the full beneficiary address, and dateOfBirth when the recipient is an individual. To pay one of the organisation's saved beneficiaries, set destinationType to beneficiary and pass its beneficiaryId instead of bank details. The payout network comes from the quote. To pay a mobile money wallet (a mobile_money quote), keep destinationType bank and send walletProvider and walletAccount with accountHolderName, bankCountry and bankCurrency, and no bank fields. A CNY bank payout needs nameInLocalLanguage and nationalIdentificationNumber, and for goods trade (purposeCode GENERAL_GOODS_TRADES) logisticsTrackingDetails and items. A unionpay quote is a personal remittance to mainland China: purposeCode PERSONAL_REMITTANCE or USER_WITHDRAWAL. For a swap (a quote between two stablecoins or two networks), set destinationType to crypto with destinationCurrency, destinationNetwork and destinationAddress; currency and network must match the quote. A swap is funded by a deposit (fund_transfer) and needs no bank details or purposeCode.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID for this transfer |
 | `quoteId` | string | Yes | The quote ID to execute |
 | `destinationType` | `bank` \| `crypto` \| `beneficiary` | No | Payout target: a bank account (off-ramp), a wallet address (swap), or a saved beneficiary. Default: `"bank"`. |
-| `beneficiaryId` | string | No | Saved beneficiary id when destinationType is beneficiary. It supplies the recipient and bank details, so the bank fields are ignored; archived beneficiaries are refused |
+| `beneficiaryId` | string | No | Saved beneficiary id when destinationType is beneficiary. It supplies the recipient and bank details, so the bank fields are ignored (logisticsTrackingDetails, items and documents still travel with the payout); archived beneficiaries are refused |
 | `accountHolderName` | string | No | Account holder's full name, or the company name when recipientType is business |
-| `bankName` | string | No | Name of the destination bank |
-| `bankCountry` | string | No | Bank country, ISO 2-letter (e.g. 'AU', 'US') |
+| `bankName` | string | No | Name of the destination bank. Required unless paying a mobile money wallet |
+| `bankCountry` | string | No | Bank country, ISO 2-letter (e.g. 'AU', 'US'). For mobile money, the country of the wallet |
 | `bankCurrency` | string | No | Payout currency, ISO 3-letter (e.g. 'EUR') |
 | `recipientType` | `individual` \| `business` | No | Beneficiary type. Required for AED, CAD, EUR, GBP, MXN, USD |
 | `dateOfBirth` | string | No | Beneficiary date of birth, YYYY-MM-DD. Required when recipientType is individual for AED, CAD, EUR, GBP, MXN, USD |
-| `addressStreet` | string | No | Beneficiary street address |
+| `phone` | string | No | Beneficiary phone number in E.164 format (e.g. '+5215512345678') |
+| `nameInLocalLanguage` | string | No | Account holder name in the local language (e.g. Chinese characters for CNY) |
+| `nationalIdentificationNumber` | string | No | National identification number of the account holder |
+| `addressStreet` | string | No | Beneficiary street address. Needed, with addressCountry, whenever an address is sent |
 | `addressCity` | string | No | Beneficiary city |
 | `addressState` | string | No | Beneficiary state or region |
 | `addressPostalCode` | string | No | Beneficiary postal code |
 | `addressCountry` | string | No | Beneficiary country, ISO 2-letter. The complete address is required for AED, CAD, EUR, GBP, MXN, USD |
+| `bankAddressStreet` | string | No | Street address of the beneficiary's bank. A bank address is required for a USD SWIFT payout to an account the paying customer does not hold; street and country at minimum |
+| `bankAddressCity` | string | No | City of the beneficiary's bank |
+| `bankAddressState` | string | No | State or region of the beneficiary's bank |
+| `bankAddressPostalCode` | string | No | Postal code of the beneficiary's bank |
+| `bankAddressCountry` | string | No | Country of the beneficiary's bank, ISO 2-letter |
+| `walletProvider` | string | No | Mobile money only: the wallet provider code, as listed for the corridor (e.g. 'mtn_gh'). Requires walletAccount, and every bank field (bankName, accountNumber, iban, bank codes) must be left out |
+| `walletAccount` | string | No | Mobile money only: the wallet's identifier, such as its mobile number (e.g. '+233241234567'). Required with walletProvider |
+| `walletAccountType` | `mobile_number` | No | Mobile money only: the kind of identifier in walletAccount. Only needed where the wallet provider accepts more than one |
 | `iban` | string | No | IBAN (EU/international) |
 | `accountNumber` | string | No | Bank account number, if not using IBAN |
 | `accountType` | `savings` \| `checking` \| `payment` | No | Account type. Required for CAD and USD bank payouts |
 | `payId` | string | No | PayID alias (AUD only). Requires payIdType |
 | `payIdType` | `email` \| `phone_number` \| `abn` \| `acn` \| `organisation_id` | No | PayID alias type. Required when payId is given |
+| `branchName` | string | No | Bank branch name |
+| `paymentRail` | `ach` \| `wire` | No | USD payouts only: prefer ACH or wire. Omit for the account's default. A rail that is not available is refused |
 | `swiftCode` | string | No | SWIFT code |
 | `bicCode` | string | No | BIC (EUR/GBP international) |
 | `routingNumber` | string | No | ABA routing number (US) |
@@ -286,16 +319,22 @@ Create a transfer from an active quote. The quote must not be expired. With fund
 | `bankCode` | string | No | Bank code / institution number (CAD) |
 | `branchCode` | string | No | Branch code / transit number (CAD) |
 | `cnaps` | string | No | CNAPS (China) |
+| `logisticsTrackingDetails` | object[] | No | Shipment tracking for the goods the payout pays for. Required, with items, for a CNY bank payout with purposeCode GENERAL_GOODS_TRADES |
+| `items` | object[] | No | Goods the payout pays for, as invoice lines. Required, with logisticsTrackingDetails, for a CNY bank payout with purposeCode GENERAL_GOODS_TRADES |
+| `documents` | object[] | No | Supporting documents for the payout, such as an invoice or contract |
 | `destinationCurrency` | string | No | Stablecoin to deliver when destinationType is crypto (e.g. 'USDT'). Must match the quote's destination currency |
 | `destinationNetwork` | string | No | Blockchain network when destinationType is crypto (e.g. 'polygon'). Must match the quote's destination network |
 | `destinationAddress` | string | No | Wallet address when destinationType is crypto. It must be valid on destinationNetwork: funds sent to a wrong address cannot be recovered |
 | `purposeCode` | `PAYMENT_FOR_SERVICES` \| `PAYMENT_FOR_SOFTWARE` \| `PAYMENT_FOR_IMPORTED_GOODS` \| `TRAVEL_SERVICES` \| `VENDOR_CONTRACTOR_PAYOUTS` \| `TRANSFER_TO_OWN_ACCOUNT` \| `INVESTMENT_IN_SHARES` \| `PURCHASE_OF_PROPERTY` \| `REPAYMENT_OF_LOANS` \| `SALARY` \| `PAYMENT_OF_PROPERTY_RENTAL` \| `INFORMATION_SERVICE_CHARGES` \| `ADVERTISING_PR_EXPENSES` \| `ROYALTY_FEES` \| `BROKER_COMMITMENT_FEES` \| `ADVISOR_TECHNICAL_FEES` \| `REPRESENTATIVE_OFFICE_EXPENSES` \| `TAX_PAYMENT` \| `TRANSPORTATION_FEES_FOR_GOODS` \| `CONSTRUCTION_COSTS` \| `INSURANCE_PREMIUM` \| `GENERAL_GOODS_TRADES` \| `INSURANCE_CLAIMS_PAYMENT` \| `FAMILY_MAINTENANCE` \| `EDUCATION_EXPENSES` \| `MEDICAL_TREATMENT` \| `DONATIONS` \| `MUTUAL_FUND_INVESTMENT` \| `CURRENCY_EXCHANGE` \| `USER_WITHDRAWAL` \| `ADVANCE_PAYMENTS_FOR_GOODS` \| `VENDOR_CONTRACTOR_SOFTWARE_PAYOUTS` \| `MERCHANT_SETTLEMENT` \| `REPATRIATION_FUND_SETTLEMENT` \| `PERSONAL_REMITTANCE` \| `RETURN_OF_FUNDS` | No | Purpose of the transfer (e.g. 'SALARY'). Required on some corridors |
+| `paymentReference` | string | No | Text sent with a bank payout so the recipient can tell what it is for, such as an invoice number. Up to 35 characters: letters, digits, spaces and / - ? : ( ) . , ' + only. Some payouts carry less and refuse a reference that does not fit. No effect on a crypto destination |
+| `accountOwnership` | `first_party` \| `third_party` | No | Whose bank account the payout pays: the customer's own (first_party) or someone else's (third_party). A third_party payout needs a purposeCode, and is refused where this type of customer may only pay their own account. No effect on a crypto destination |
+| `sourceWallet` | object | No | Custody of the wallet the customer will send from, for the travel rule. Defaults to self_hosted when omitted |
 | `fundingSource` | `fund_transfer` \| `prefund_balance` | No | fund_transfer (default) creates the transfer and returns deposit instructions; nothing moves until a person deposits the funds. prefund_balance debits your organisation's balance and starts the payout immediately, so it needs explicit human approval. Check get_balance first: transfers_enabled must be true and the quote's source asset must be held on its network |
 | `metadata` | object | No | Optional metadata |
 
 #### get_transfer
 
-Get the current status and details of a transfer
+Get the current status and details of a transfer, including its payment reference, a SWIFT payout's tracking (UETR, then the MT103 once issued), an open compliance hold and any refund
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -307,7 +346,7 @@ List transfers with optional filters for status, type, or customer
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `status` | `created` \| `compliance_hold` \| `awaiting_funds_collection` \| `funds_collected` \| `in_progress` \| `payment_submitted` \| `payment_processed` \| `completed` \| `failed` \| `cancelled` \| `expired` | No | Filter by transfer status |
+| `status` | `created` \| `compliance_hold` \| `awaiting_funds_collection` \| `funds_collected` \| `in_progress` \| `payment_submitted` \| `payment_processed` \| `completed` \| `failed` \| `cancelled` \| `expired` \| `refund_pending` \| `refunded` \| `refund_failed` | No | Filter by transfer status |
 | `type` | `onramp` \| `offramp` \| `swap` | No | Filter by transfer type. swap is crypto to crypto |
 | `customerId` | string | No | Filter by customer ID |
 | `pageSize` | number | No | Number of transfers per page (default: 20) |
@@ -322,7 +361,7 @@ List the organisation's saved beneficiaries, most recently paid first. Use it to
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `currency` | string | No | Only beneficiaries paid in this currency (e.g. 'EUR') |
-| `network` | `bank` \| `swift` | No | Only beneficiaries paid by this network |
+| `network` | `bank` \| `swift` \| `mobile_money` \| `unionpay` | No | Only beneficiaries paid by this network: bank, swift, mobile_money (a wallet) or unionpay (personal remittance to mainland China in CNY) |
 | `status` | `active` \| `archived` \| `all` | No | Defaults to active. Archived beneficiaries cannot be paid |
 | `search` | string | No | Case-insensitive match on label, account holder or bank name |
 | `pageSize` | number | No | Beneficiaries per page (default 50, max 100) |
@@ -338,28 +377,41 @@ Get a saved beneficiary's recipient and bank details, and whether it still passe
 
 #### create_beneficiary
 
-Save a recipient and their bank account for a currency and network, so later transfers can pay it by id. The details are validated exactly as a transfer on that network would be. Saving an account that is already saved returns the existing beneficiary with its details refreshed, and revives it if archived.
+Save a recipient and their bank account or mobile money wallet for a currency and network, so later transfers can pay it by id. The details are validated exactly as a transfer on that network would be. Saving an account that is already saved returns the existing beneficiary with its details refreshed, and revives it if archived. For mobile_money send walletProvider and walletAccount with accountHolderName, bankCountry and bankCurrency, and no bank fields. A CNY bank payout needs nameInLocalLanguage and nationalIdentificationNumber, and for goods trade (purposeCode GENERAL_GOODS_TRADES) logisticsTrackingDetails and items; the goods details travel with each transfer, not the saved beneficiary. PayID aliases are paid per transfer and cannot be saved.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `network` | `bank` \| `swift` | Yes | Network the beneficiary is paid by: bank = local transfer, swift = international wire |
+| `network` | `bank` \| `swift` \| `mobile_money` \| `unionpay` | Yes | Network the beneficiary is paid by: bank = local transfer, swift = international wire, mobile_money = a mobile money wallet (walletProvider and walletAccount, no bank fields), unionpay = personal remittance to a bank account in mainland China in CNY (purposeCode PERSONAL_REMITTANCE or USER_WITHDRAWAL on the transfer, and the customer needs the cny_unionpay entitlement) |
 | `label` | string | No | Display name (e.g. 'Acme Supplies (EUR)'). Defaults to the account holder name |
 | `accountHolderName` | string | No | Account holder's full name, or the company name when recipientType is business |
-| `bankName` | string | No | Name of the destination bank |
-| `bankCountry` | string | No | Bank country, ISO 2-letter (e.g. 'AU', 'US') |
+| `bankName` | string | No | Name of the destination bank. Required unless paying a mobile money wallet |
+| `bankCountry` | string | No | Bank country, ISO 2-letter (e.g. 'AU', 'US'). For mobile money, the country of the wallet |
 | `bankCurrency` | string | No | Payout currency, ISO 3-letter (e.g. 'EUR') |
 | `recipientType` | `individual` \| `business` | No | Beneficiary type. Required for AED, CAD, EUR, GBP, MXN, USD |
 | `dateOfBirth` | string | No | Beneficiary date of birth, YYYY-MM-DD. Required when recipientType is individual for AED, CAD, EUR, GBP, MXN, USD |
-| `addressStreet` | string | No | Beneficiary street address |
+| `phone` | string | No | Beneficiary phone number in E.164 format (e.g. '+5215512345678') |
+| `nameInLocalLanguage` | string | No | Account holder name in the local language (e.g. Chinese characters for CNY) |
+| `nationalIdentificationNumber` | string | No | National identification number of the account holder |
+| `addressStreet` | string | No | Beneficiary street address. Needed, with addressCountry, whenever an address is sent |
 | `addressCity` | string | No | Beneficiary city |
 | `addressState` | string | No | Beneficiary state or region |
 | `addressPostalCode` | string | No | Beneficiary postal code |
 | `addressCountry` | string | No | Beneficiary country, ISO 2-letter. The complete address is required for AED, CAD, EUR, GBP, MXN, USD |
+| `bankAddressStreet` | string | No | Street address of the beneficiary's bank. A bank address is required for a USD SWIFT payout to an account the paying customer does not hold; street and country at minimum |
+| `bankAddressCity` | string | No | City of the beneficiary's bank |
+| `bankAddressState` | string | No | State or region of the beneficiary's bank |
+| `bankAddressPostalCode` | string | No | Postal code of the beneficiary's bank |
+| `bankAddressCountry` | string | No | Country of the beneficiary's bank, ISO 2-letter |
+| `walletProvider` | string | No | Mobile money only: the wallet provider code, as listed for the corridor (e.g. 'mtn_gh'). Requires walletAccount, and every bank field (bankName, accountNumber, iban, bank codes) must be left out |
+| `walletAccount` | string | No | Mobile money only: the wallet's identifier, such as its mobile number (e.g. '+233241234567'). Required with walletProvider |
+| `walletAccountType` | `mobile_number` | No | Mobile money only: the kind of identifier in walletAccount. Only needed where the wallet provider accepts more than one |
 | `iban` | string | No | IBAN (EU/international) |
 | `accountNumber` | string | No | Bank account number, if not using IBAN |
 | `accountType` | `savings` \| `checking` \| `payment` | No | Account type. Required for CAD and USD bank payouts |
 | `payId` | string | No | PayID alias (AUD only). Requires payIdType |
 | `payIdType` | `email` \| `phone_number` \| `abn` \| `acn` \| `organisation_id` | No | PayID alias type. Required when payId is given |
+| `branchName` | string | No | Bank branch name |
+| `paymentRail` | `ach` \| `wire` | No | USD payouts only: prefer ACH or wire. Omit for the account's default. A rail that is not available is refused |
 | `swiftCode` | string | No | SWIFT code |
 | `bicCode` | string | No | BIC (EUR/GBP international) |
 | `routingNumber` | string | No | ABA routing number (US) |
@@ -397,21 +449,34 @@ Create a payment route for a customer. fiat_to_crypto (the default) issues a vir
 | `payoutType` | `bank` \| `beneficiary` | No | crypto_to_fiat only: pay out to bank details given here, or to a saved beneficiary. Default: `"bank"`. |
 | `beneficiaryId` | string | No | crypto_to_fiat with payoutType beneficiary: a saved beneficiary id. Its bank details are copied onto the route; archived beneficiaries are refused |
 | `accountHolderName` | string | No | Account holder's full name, or the company name when recipientType is business |
-| `bankName` | string | No | Name of the destination bank |
-| `bankCountry` | string | No | Bank country, ISO 2-letter (e.g. 'AU', 'US') |
+| `bankName` | string | No | Name of the destination bank. Required unless paying a mobile money wallet |
+| `bankCountry` | string | No | Bank country, ISO 2-letter (e.g. 'AU', 'US'). For mobile money, the country of the wallet |
 | `bankCurrency` | string | No | Payout currency, ISO 3-letter (e.g. 'EUR') |
 | `recipientType` | `individual` \| `business` | No | Beneficiary type. Required for AED, CAD, EUR, GBP, MXN, USD |
 | `dateOfBirth` | string | No | Beneficiary date of birth, YYYY-MM-DD. Required when recipientType is individual for AED, CAD, EUR, GBP, MXN, USD |
-| `addressStreet` | string | No | Beneficiary street address |
+| `phone` | string | No | Beneficiary phone number in E.164 format (e.g. '+5215512345678') |
+| `nameInLocalLanguage` | string | No | Account holder name in the local language (e.g. Chinese characters for CNY) |
+| `nationalIdentificationNumber` | string | No | National identification number of the account holder |
+| `addressStreet` | string | No | Beneficiary street address. Needed, with addressCountry, whenever an address is sent |
 | `addressCity` | string | No | Beneficiary city |
 | `addressState` | string | No | Beneficiary state or region |
 | `addressPostalCode` | string | No | Beneficiary postal code |
 | `addressCountry` | string | No | Beneficiary country, ISO 2-letter. The complete address is required for AED, CAD, EUR, GBP, MXN, USD |
+| `bankAddressStreet` | string | No | Street address of the beneficiary's bank. A bank address is required for a USD SWIFT payout to an account the paying customer does not hold; street and country at minimum |
+| `bankAddressCity` | string | No | City of the beneficiary's bank |
+| `bankAddressState` | string | No | State or region of the beneficiary's bank |
+| `bankAddressPostalCode` | string | No | Postal code of the beneficiary's bank |
+| `bankAddressCountry` | string | No | Country of the beneficiary's bank, ISO 2-letter |
+| `walletProvider` | string | No | Mobile money only: the wallet provider code, as listed for the corridor (e.g. 'mtn_gh'). Requires walletAccount, and every bank field (bankName, accountNumber, iban, bank codes) must be left out |
+| `walletAccount` | string | No | Mobile money only: the wallet's identifier, such as its mobile number (e.g. '+233241234567'). Required with walletProvider |
+| `walletAccountType` | `mobile_number` | No | Mobile money only: the kind of identifier in walletAccount. Only needed where the wallet provider accepts more than one |
 | `iban` | string | No | IBAN (EU/international) |
 | `accountNumber` | string | No | Bank account number, if not using IBAN |
 | `accountType` | `savings` \| `checking` \| `payment` | No | Account type. Required for CAD and USD bank payouts |
 | `payId` | string | No | PayID alias (AUD only). Requires payIdType |
 | `payIdType` | `email` \| `phone_number` \| `abn` \| `acn` \| `organisation_id` | No | PayID alias type. Required when payId is given |
+| `branchName` | string | No | Bank branch name |
+| `paymentRail` | `ach` \| `wire` | No | USD payouts only: prefer ACH or wire. Omit for the account's default. A rail that is not available is refused |
 | `swiftCode` | string | No | SWIFT code |
 | `bicCode` | string | No | BIC (EUR/GBP international) |
 | `routingNumber` | string | No | ABA routing number (US) |
