@@ -39,10 +39,21 @@ const STATUS_EXPLANATIONS: Partial<Record<TransferStatus, string>> = {
 };
 
 function describeType(type: string): string {
-  return type === "onramp" ? "On-ramp (Fiat to Crypto)" : "Off-ramp (Crypto to Fiat)";
+  if (type === "onramp") return "On-ramp (Fiat to Crypto)";
+  if (type === "swap") return "Swap (Crypto to Crypto)";
+  return "Off-ramp (Crypto to Fiat)";
 }
 
-function depositBlock(transfer: { source_deposit_instructions?: Record<string, unknown> }): string {
+function shortType(type: string): string {
+  if (type === "onramp") return "On-ramp";
+  if (type === "swap") return "Swap";
+  return "Off-ramp";
+}
+
+function depositBlock(transfer: {
+  type?: string;
+  source_deposit_instructions?: Record<string, unknown>;
+}): string {
   const deposit = transfer.source_deposit_instructions;
   const wallet = deposit?.["wallet_address"];
   if (!wallet) return "";
@@ -53,7 +64,11 @@ Deposit Instructions (share with customer):
   Network: ${String(deposit?.["network"] ?? "-")}
   Amount: ${String(deposit?.["amount"] ?? "-")}
 
-The customer must send this amount to that address. Once received, Stables processes the payout.`;
+The customer must send this amount to that address. Once received, Stables ${
+    transfer.type === "swap"
+      ? "delivers the swap to the destination wallet"
+      : "processes the payout"
+  }.`;
 }
 
 // The API rejects anything else; listing them saves an agent a failed transfer.
@@ -207,7 +222,8 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
       "With fundingSource fund_transfer (the default) this only creates the transfer and returns deposit instructions; no money moves until someone deposits the funds. " +
       "With prefund_balance it debits your organisation's balance and starts the payout immediately, so this moves real money: get explicit human approval first. " +
       `For payouts in ${ENHANCED_BENEFICIARY_CURRENCIES} you must also supply recipientType, the full beneficiary address, and dateOfBirth when the recipient is an individual. ` +
-      "To pay one of the organisation's saved beneficiaries, set destinationType to beneficiary and pass its beneficiaryId instead of bank details.",
+      "To pay one of the organisation's saved beneficiaries, set destinationType to beneficiary and pass its beneficiaryId instead of bank details. " +
+      "For a swap (a quote between two stablecoins or two networks), set destinationType to crypto with destinationCurrency, destinationNetwork and destinationAddress; currency and network must match the quote. A swap is funded by a deposit (fund_transfer) and needs no bank details or purposeCode.",
     {
       customerId: z.string().describe("The customer ID for this transfer"),
       quoteId: z.string().describe("The quote ID to execute"),
@@ -215,7 +231,7 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
         .enum(["bank", "crypto", "beneficiary"])
         .default("bank")
         .describe(
-          "Payout target: a bank account (off-ramp), a wallet address, or a saved beneficiary"
+          "Payout target: a bank account (off-ramp), a wallet address (swap), or a saved beneficiary"
         ),
       beneficiaryId: z
         .string()
@@ -229,15 +245,21 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
       destinationCurrency: z
         .string()
         .optional()
-        .describe("Stablecoin to deliver when destinationType is crypto (e.g. 'USDT')"),
+        .describe(
+          "Stablecoin to deliver when destinationType is crypto (e.g. 'USDT'). Must match the quote's destination currency"
+        ),
       destinationNetwork: z
         .string()
         .optional()
-        .describe("Blockchain network when destinationType is crypto (e.g. 'polygon')"),
+        .describe(
+          "Blockchain network when destinationType is crypto (e.g. 'polygon'). Must match the quote's destination network"
+        ),
       destinationAddress: z
         .string()
         .optional()
-        .describe("Wallet address when destinationType is crypto"),
+        .describe(
+          "Wallet address when destinationType is crypto. It must be valid on destinationNetwork: funds sent to a wrong address cannot be recovered"
+        ),
 
       purposeCode: z
         .enum(PURPOSE_CODES)
@@ -442,7 +464,10 @@ ${statusInfo}`,
         ])
         .optional()
         .describe("Filter by transfer status"),
-      type: z.enum(["onramp", "offramp"]).optional().describe("Filter by transfer type"),
+      type: z
+        .enum(["onramp", "offramp", "swap"])
+        .optional()
+        .describe("Filter by transfer type. swap is crypto to crypto"),
       customerId: z.string().optional().describe("Filter by customer ID"),
       pageSize: z.number().optional().describe("Number of transfers per page (default: 20)"),
       pageToken: z.string().optional().describe("Token for the next page of results"),
@@ -470,8 +495,7 @@ ${statusInfo}`,
 
         const transferList = response.transfers
           .map((t) => {
-            const typeShort = t.type === "onramp" ? "On-ramp" : "Off-ramp";
-            return `- ${t.id}: ${typeShort} - ${t.status} (Customer: ${t.customer_id})`;
+            return `- ${t.id}: ${shortType(t.type)} - ${t.status} (Customer: ${t.customer_id})`;
           })
           .join("\n");
 

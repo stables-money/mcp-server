@@ -85,6 +85,36 @@ const EXTRA_CASES: Record<string, Json[]> = {
       payoutNetwork: "bank",
       purposeCode: "PERSONAL_REMITTANCE",
     },
+    // Swap routes: a stablecoin address delivering another stablecoin on another network.
+    {
+      customerId: UUID,
+      workflowType: "crypto_to_crypto",
+      sourceCurrency: "USDT",
+      sourceNetwork: "tron",
+      destinationCurrency: "usdc",
+      destinationPaymentRail: "base",
+      destinationAddress: "0x2f61a3b4c5d6e7f809a1b2c38f3a2b1c4d5ec386",
+    },
+  ],
+  // A swap: two stablecoins, both sides on a blockchain network, no country.
+  create_quote: [
+    {
+      sourceCurrency: "USDT",
+      sourceAmount: "150",
+      sourceNetwork: "tron",
+      destinationCurrency: "USDC",
+      destinationNetwork: "base",
+    },
+  ],
+  create_transfer: [
+    {
+      customerId: UUID,
+      quoteId: UUID,
+      destinationType: "crypto",
+      destinationCurrency: "USDC",
+      destinationNetwork: "base",
+      destinationAddress: "0x2f61a3b4c5d6e7f809a1b2c38f3a2b1c4d5ec386",
+    },
   ],
 };
 

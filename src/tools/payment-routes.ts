@@ -49,7 +49,7 @@ function isCryptoInstructions(
   return (i as CryptoDepositInstructions).type === "crypto";
 }
 
-/** Deposit instructions for either kind of route: bank details, or an off-ramp route's address. */
+/** Deposit instructions for any kind of route: bank details, or an off-ramp or swap route's address. */
 function describeDepositInstructions(
   instructions: VirtualAccountDepositInstructions | CryptoDepositInstructions
 ): string {
@@ -73,7 +73,7 @@ Address: ${instructions.wallet_address}`;
   return info;
 }
 
-/** Where deposits are paid out: a wallet (on-ramp route) or a bank account (off-ramp route). */
+/** Where deposits are paid out: a wallet (on-ramp or swap route) or a bank account (off-ramp route). */
 function describePayout(account: VirtualAccount): string {
   if (account.destination) {
     return `Payout Address: ${account.destination.address}
@@ -123,19 +123,20 @@ export function registerPaymentRouteTools(server: McpServer, client: StablesApiC
       "Set sourcePaymentRail to 'swift' for a SWIFT collection account: an IBAN that receives international SWIFT transfers, for business customers whose verification is approved and who hold the base_pay_in entitlement; it is not in the customer's name, and settles in USDT on Tron. " +
       "crypto_to_fiat (an off-ramp route) issues a permanent USDT or USDC deposit address on sourceNetwork: every deposit converts and pays out to one bank account, given as a saved beneficiary (payoutType beneficiary + beneficiaryId) or as bank details. " +
       "On a crypto_to_fiat route, swiftCode or bicCode is needed only when payoutNetwork is swift. Its deposits are route transactions, read with get_payment_route_history, never transfers. " +
+      "crypto_to_crypto (a swap route) issues a permanent USDT or USDC deposit address on sourceNetwork: every deposit is swapped and delivered to destinationAddress as destinationCurrency on destinationPaymentRail, which must differ from the source in stablecoin, network or both. Its deposits are route transactions too. " +
       "Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_payment_route.",
     {
       customerId: z.string().describe("The customer ID to create the payment route for"),
       workflowType: z
-        .enum(["fiat_to_crypto", "crypto_to_fiat"])
+        .enum(["fiat_to_crypto", "crypto_to_fiat", "crypto_to_crypto"])
         .default("fiat_to_crypto")
         .describe(
-          "fiat_to_crypto: a virtual bank account paying out to a wallet. crypto_to_fiat: a permanent stablecoin address paying out to a bank account"
+          "fiat_to_crypto: a virtual bank account paying out to a wallet. crypto_to_fiat: a permanent stablecoin address paying out to a bank account. crypto_to_crypto: a permanent stablecoin address whose deposits are swapped to another stablecoin and/or network and sent to a wallet"
         ),
       sourceCurrency: z
         .string()
         .describe(
-          "What the customer deposits: a fiat currency for fiat_to_crypto (e.g. 'AUD', 'USD'), or 'USDT' / 'USDC' for crypto_to_fiat"
+          "What the customer deposits: a fiat currency for fiat_to_crypto (e.g. 'AUD', 'USD'), or 'USDT' / 'USDC' for crypto_to_fiat and crypto_to_crypto"
         ),
       sourcePaymentRail: z
         .enum(["swift"])
@@ -147,23 +148,25 @@ export function registerPaymentRouteTools(server: McpServer, client: StablesApiC
       sourceNetwork: z
         .enum(NETWORKS)
         .optional()
-        .describe("crypto_to_fiat only, required: the network the deposit address is issued on"),
+        .describe(
+          "crypto_to_fiat and crypto_to_crypto, required: the network the deposit address is issued on"
+        ),
       destinationAddress: z
         .string()
         .optional()
         .describe(
-          "fiat_to_crypto only, required: wallet address deposits are paid out to. Validated against the chosen network"
+          "fiat_to_crypto and crypto_to_crypto, required: wallet address deposits are paid out to. Validated against the chosen network"
         ),
       destinationPaymentRail: z
         .enum(NETWORKS)
         .optional()
         .describe(
-          "fiat_to_crypto only, required: blockchain network the payout address belongs to"
+          "fiat_to_crypto and crypto_to_crypto, required: blockchain network the payout address belongs to"
         ),
       destinationCurrency: z
         .enum(["usdc", "usdt", "dai", "pyusd", "eurc"])
         .default("usdt")
-        .describe("fiat_to_crypto only: stablecoin to receive"),
+        .describe("fiat_to_crypto and crypto_to_crypto: stablecoin to receive"),
       payoutType: z
         .enum(["bank", "beneficiary"])
         .default("bank")
@@ -226,6 +229,34 @@ export function registerPaymentRouteTools(server: McpServer, client: StablesApiC
             ...(input.purposeCode && { purpose_code: input.purposeCode }),
             ...(input.metadata && { metadata: input.metadata }),
           };
+        } else if (input.workflowType === "crypto_to_crypto") {
+          if (!input.sourceNetwork) {
+            throw new Error("A crypto_to_crypto route needs sourceNetwork");
+          }
+          if (!input.destinationAddress || !input.destinationPaymentRail) {
+            throw new Error(
+              "A crypto_to_crypto route needs destinationAddress and destinationPaymentRail"
+            );
+          }
+          // The API refuses this too; saying so here saves the round trip.
+          if (
+            input.sourceCurrency.toLowerCase() === input.destinationCurrency &&
+            input.sourceNetwork === input.destinationPaymentRail
+          ) {
+            throw new Error(
+              "A crypto_to_crypto route must change the stablecoin, the network or both"
+            );
+          }
+          request = {
+            source: { currency: input.sourceCurrency.toUpperCase(), network: input.sourceNetwork },
+            workflow_type: "crypto_to_crypto",
+            destination: {
+              currency: input.destinationCurrency,
+              payment_rail: input.destinationPaymentRail,
+              address: input.destinationAddress,
+            },
+            ...(input.metadata && { metadata: input.metadata }),
+          };
         } else {
           if (!input.destinationAddress || !input.destinationPaymentRail) {
             throw new Error(
@@ -281,7 +312,7 @@ Share the deposit instructions with the customer to receive funds.`,
   // Get one payment route
   server.tool(
     "get_payment_route",
-    "Get one payment route by ID, including its deposit instructions (bank details, or an off-ramp route's deposit address) and payout destination",
+    "Get one payment route by ID, including its deposit instructions (bank details, or an off-ramp or swap route's deposit address) and payout destination",
     {
       customerId: z.string().describe("The customer ID"),
       virtualAccountId: z.string().describe("The payment route ID"),
