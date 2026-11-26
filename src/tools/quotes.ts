@@ -10,6 +10,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { StablesApiClient, Quote } from "../lib/stables-client.js";
+import { PAYOUT_NETWORK_GUIDE } from "./transfers.js";
 
 const LIVE_NETWORKS = [
   "arbitrum",
@@ -56,6 +57,7 @@ export function registerQuoteTools(server: McpServer, client: StablesApiClient) 
     "Get a quote for a currency exchange: the rate, the fees, and what the customer receives. Quotes are short-lived, so create one immediately before the transfer. " +
       "Off-ramp converts a stablecoin to fiat (source network required, destination country required); on-ramp converts fiat to a stablecoin (destination address required). " +
       "A swap converts a stablecoin to another stablecoin and/or moves it to another network: USDT or USDC on both sides, sourceNetwork and destinationNetwork both blockchain networks, no destinationCountry. The same stablecoin on the same network is refused. " +
+      "Give sourceAmount to quote what a fixed amount buys, or destinationAmount to quote what an exact amount received costs (only on routes that support it); never both. " +
       "Set preview to price without committing.",
     {
       sourceCurrency: z
@@ -63,7 +65,12 @@ export function registerQuoteTools(server: McpServer, client: StablesApiClient) 
         .describe(
           "Source currency: a stablecoin for off-ramp or swap (e.g. 'USDT'), fiat for on-ramp"
         ),
-      sourceAmount: z.string().describe("Amount to convert, in major units (e.g. '125.75')"),
+      sourceAmount: z
+        .string()
+        .optional()
+        .describe(
+          "Amount to convert, in major units (e.g. '125.75'). Give exactly one of sourceAmount and destinationAmount"
+        ),
       sourceNetwork: z
         .enum(LIVE_NETWORKS)
         .optional()
@@ -83,12 +90,30 @@ export function registerQuoteTools(server: McpServer, client: StablesApiClient) 
         .string()
         .optional()
         .describe(
-          "Off-ramp: payment network, 'swift' or 'bank'. On-ramp and swap: the blockchain network to deliver on (required for a swap, e.g. 'base'). Replaces the old paymentMethodType"
+          `Off-ramp: the payout network. ${PAYOUT_NETWORK_GUIDE}. On-ramp and swap: the blockchain network to deliver on (required for a swap, e.g. 'base')`
+        ),
+      destinationAmount: z
+        .string()
+        .optional()
+        .describe(
+          "Exact amount the recipient must receive, in major units (e.g. '100'), instead of sourceAmount. The quote then says what to send. Refused on routes that do not support an exact destination amount"
         ),
       destinationAddress: z
         .string()
         .optional()
         .describe("Destination wallet address. Required for on-ramp"),
+      customerId: z
+        .string()
+        .optional()
+        .describe(
+          "The customer the quote is for. With it, the quote also uses payout routes that need the customer to be set up first, and the transfer must then be created for the same customer. Without it, only routes that need no customer set-up are used"
+        ),
+      fundingSource: z
+        .enum(["fund_transfer", "prefund_balance"])
+        .optional()
+        .describe(
+          "How the transfer made from this quote will be funded. fund_transfer (default): a deposit for that transfer. prefund_balance prices the quote for payment from your organisation's balance, and the transfer must then use the same fundingSource. Quoting moves no money, but a prefund_balance transfer debits the balance and starts the payout immediately, so it needs explicit human approval"
+        ),
       preview: z
         .boolean()
         .optional()
@@ -97,10 +122,14 @@ export function registerQuoteTools(server: McpServer, client: StablesApiClient) 
     },
     async (input) => {
       try {
+        // The API refuses both and neither; saying so here saves the round trip.
+        if (Boolean(input.sourceAmount) === Boolean(input.destinationAmount)) {
+          throw new Error("Provide exactly one of sourceAmount or destinationAmount");
+        }
         const quote = await client.createQuote({
           source: {
             currency: input.sourceCurrency,
-            amount: input.sourceAmount,
+            ...(input.sourceAmount && { amount: input.sourceAmount }),
             ...(input.sourceNetwork && { network: input.sourceNetwork }),
           },
           destination: {
@@ -108,7 +137,10 @@ export function registerQuoteTools(server: McpServer, client: StablesApiClient) 
             ...(input.destinationCountry && { country: input.destinationCountry }),
             ...(input.destinationNetwork && { network: input.destinationNetwork }),
             ...(input.destinationAddress && { address: input.destinationAddress }),
+            ...(input.destinationAmount && { amount: input.destinationAmount }),
           },
+          ...(input.fundingSource && { funding_source: input.fundingSource }),
+          ...(input.customerId && { customer_id: input.customerId }),
           ...(input.preview !== undefined && { preview: input.preview }),
           ...(input.metadata && { metadata: input.metadata }),
         });

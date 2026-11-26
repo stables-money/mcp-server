@@ -9,7 +9,17 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { Beneficiary, StablesApiClient } from "../lib/stables-client.js";
-import { bankDestinationShape, buildBankDestination } from "./transfers.js";
+import {
+  BENEFICIARY_NETWORKS,
+  CNY_BANK_GUIDE,
+  bankDestinationShape,
+  buildBankDestination,
+} from "./transfers.js";
+
+/** Where the money lands: the bank, or the wallet provider for a mobile money beneficiary. */
+function institutionOf(b: Beneficiary): string {
+  return b.destination.bank_name ?? b.destination.wallet_provider ?? "-";
+}
 
 function nameOf(b: Beneficiary): string {
   return b.label ?? b.destination.account_holder_name;
@@ -26,10 +36,13 @@ function validationLine(b: Beneficiary): string {
 function details(b: Beneficiary): string {
   const d = b.destination;
   const account = d.iban ?? d.account_number;
+  const institution = d.wallet_provider
+    ? `Wallet: ${d.wallet_provider}${d.wallet_account ? ` ${d.wallet_account}` : ""}, ${d.bank_country}`
+    : `Bank: ${institutionOf(b)}, ${d.bank_country}`;
   return `Beneficiary ID: ${b.id}
 Name: ${nameOf(b)}
 Account holder: ${d.account_holder_name}${d.recipient_type ? ` (${d.recipient_type})` : ""}
-Bank: ${d.bank_name}, ${d.bank_country}
+${institution}
 ${account ? `Account: ${account}\n` : ""}Currency: ${d.currency}
 Network: ${b.network}
 Status: ${b.status}
@@ -66,9 +79,11 @@ export function registerBeneficiaryTools(server: McpServer, client: StablesApiCl
         .optional()
         .describe("Only beneficiaries paid in this currency (e.g. 'EUR')"),
       network: z
-        .enum(["bank", "swift"])
+        .enum(BENEFICIARY_NETWORKS)
         .optional()
-        .describe("Only beneficiaries paid by this network"),
+        .describe(
+          "Only beneficiaries paid by this network: bank, swift, mobile_money (a wallet) or unionpay (personal remittance to mainland China in CNY)"
+        ),
       status: z
         .enum(["active", "archived", "all"])
         .optional()
@@ -97,7 +112,7 @@ export function registerBeneficiaryTools(server: McpServer, client: StablesApiCl
         const list = response.beneficiaries
           .map((b) => {
             const flag = b.validation.valid ? "" : ", incomplete";
-            return `- ${b.id}: ${nameOf(b)} - ${b.destination.currency} by ${b.network}, ${b.destination.bank_name} (${b.status}${flag})`;
+            return `- ${b.id}: ${nameOf(b)} - ${b.destination.currency} by ${b.network}, ${institutionOf(b)} (${b.status}${flag})`;
           })
           .join("\n");
 
@@ -138,12 +153,14 @@ ${response.page.next_page_token ? `\nMore results available. Use pageToken: "${r
   // Create Beneficiary
   server.tool(
     "create_beneficiary",
-    "Save a recipient and their bank account for a currency and network, so later transfers can pay it by id. The details are validated exactly as a transfer on that network would be. Saving an account that is already saved returns the existing beneficiary with its details refreshed, and revives it if archived.",
+    "Save a recipient and their bank account or mobile money wallet for a currency and network, so later transfers can pay it by id. The details are validated exactly as a transfer on that network would be. Saving an account that is already saved returns the existing beneficiary with its details refreshed, and revives it if archived. " +
+      "For mobile_money send walletProvider and walletAccount with accountHolderName, bankCountry and bankCurrency, and no bank fields. " +
+      `${CNY_BANK_GUIDE}; the goods details travel with each transfer, not the saved beneficiary. PayID aliases are paid per transfer and cannot be saved.`,
     {
       network: z
-        .enum(["bank", "swift"])
+        .enum(BENEFICIARY_NETWORKS)
         .describe(
-          "Network the beneficiary is paid by: bank = local transfer, swift = international wire"
+          "Network the beneficiary is paid by: bank = local transfer, swift = international wire, mobile_money = a mobile money wallet (walletProvider and walletAccount, no bank fields), unionpay = personal remittance to a bank account in mainland China in CNY (purposeCode PERSONAL_REMITTANCE or USER_WITHDRAWAL on the transfer, and the customer needs the cny_unionpay entitlement)"
         ),
       label: z
         .string()

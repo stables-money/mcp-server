@@ -336,6 +336,56 @@ describe("payment route tools", () => {
     expect(text(result)).not.toContain("undefined");
   });
 
+  it("get_payment_route_history says why a deposit was not paid out", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "dep_1",
+              virtual_account_id: ROUTE_ID,
+              deposit_amount: "5",
+              deposit_currency: "USDT",
+              payout_status: "failed",
+              deposited_at: "2026-11-26T00:00:00.000Z",
+              failure: { code: "AMOUNT_BELOW_MINIMUM", message: "Deposit is below the minimum" },
+            },
+            {
+              id: "dep_2",
+              virtual_account_id: ROUTE_ID,
+              deposit_amount: "500",
+              deposit_currency: "USDT",
+              payout_status: "completed",
+              deposited_at: "2026-11-26T01:00:00.000Z",
+            },
+          ],
+          has_more: false,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+    const result = await client.callTool({
+      name: "get_payment_route_history",
+      arguments: { customerId: "cus_1", virtualAccountId: ROUTE_ID },
+    });
+    const out = (result.content as { text: string }[])[0].text;
+
+    expect(out).toContain(
+      "payout failed (failed: AMOUNT_BELOW_MINIMUM, Deposit is below the minimum)"
+    );
+    expect(out.match(/\(failed:/g)).toHaveLength(1);
+  });
+
+  it("marks routes that pay a third party on every deposit as open-world", async () => {
+    const { tools } = await client.listTools();
+    for (const name of ["create_payment_route", "update_route_destination"]) {
+      expect(tools.find((t) => t.name === name)!.annotations?.openWorldHint, name).toBe(true);
+    }
+    expect(tools.find((t) => t.name === "update_payment_route")!.annotations?.openWorldHint).toBe(
+      false
+    );
+  });
+
   it("get_payment_route is labelled read-only", async () => {
     const { tools } = await client.listTools();
     const tool = tools.find((t) => t.name === "get_payment_route");

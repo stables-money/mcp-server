@@ -11,6 +11,9 @@ import { z } from "zod";
 import {
   StablesApiClient,
   BankTransferDestination,
+  BeneficiaryAddress,
+  PayoutExtras,
+  Transfer,
   TransferDestination,
   TransferStatus,
 } from "../lib/stables-client.js";
@@ -22,6 +25,37 @@ import {
  * rather than a clean 400.
  */
 const ENHANCED_BENEFICIARY_CURRENCIES = "AED, CAD, EUR, GBP, MXN, USD";
+
+/** Every fiat payout network the API names (ApiNetworkSchema). */
+export const PAYOUT_NETWORKS = [
+  "swift",
+  "bank",
+  "payid",
+  "mobile_money",
+  "ach",
+  "fedwire",
+  "fps",
+  "chaps",
+  "sepa",
+  "sepa_instant",
+  "fast",
+  "chats",
+  "unionpay",
+] as const;
+
+/** Networks a beneficiary can be saved on. PayID aliases are paid per transfer, never stored. */
+export const BENEFICIARY_NETWORKS = ["bank", "swift", "mobile_money", "unionpay"] as const;
+
+/** What each payout network is and needs, said once so every tool describes them alike. */
+export const PAYOUT_NETWORK_GUIDE =
+  "bank = the default domestic scheme, swift = international wire, payid = PayID alias (AUD), " +
+  "mobile_money = a mobile money wallet (needs walletProvider and walletAccount, and no bank fields). " +
+  "A named domestic scheme (ach, fedwire, fps, chaps, sepa, sepa_instant, fast, chats, unionpay) is refused where it is unavailable for the corridor. " +
+  "unionpay = personal remittance to a bank account in mainland China in CNY: purposeCode PERSONAL_REMITTANCE or USER_WITHDRAWAL, and the customer needs the cny_unionpay entitlement";
+
+/** What a CNY bank payout asks for beyond the usual bank details. */
+export const CNY_BANK_GUIDE =
+  "A CNY bank payout needs nameInLocalLanguage and nationalIdentificationNumber, and for goods trade (purposeCode GENERAL_GOODS_TRADES) logisticsTrackingDetails and items";
 
 const STATUS_EXPLANATIONS: Partial<Record<TransferStatus, string>> = {
   created: "Transfer has been created and is awaiting processing.",
@@ -35,6 +69,9 @@ const STATUS_EXPLANATIONS: Partial<Record<TransferStatus, string>> = {
   failed: "Transfer failed. Check with support for details.",
   cancelled: "Transfer was cancelled.",
   expired: "Transfer expired before completion.",
+  refund_pending: "A refund of this transfer is in progress.",
+  refunded: "Transfer was refunded, net of any processing fee.",
+  refund_failed: "The refund did not go through. Check with support for details.",
   unknown: "Transfer state could not be determined.",
 };
 
@@ -111,14 +148,25 @@ export const PURPOSE_CODES = [
   "RETURN_OF_FUNDS",
 ] as const;
 
-/** Bank payout fields, shared by create_transfer, validate_payment_method and create_beneficiary. */
+/**
+ * Recipient and account fields, shared by create_transfer, validate_payment_method,
+ * create_beneficiary and create_payment_route.
+ */
 export const bankDestinationShape = {
   accountHolderName: z
     .string()
     .optional()
     .describe("Account holder's full name, or the company name when recipientType is business"),
-  bankName: z.string().optional().describe("Name of the destination bank"),
-  bankCountry: z.string().optional().describe("Bank country, ISO 2-letter (e.g. 'AU', 'US')"),
+  bankName: z
+    .string()
+    .optional()
+    .describe("Name of the destination bank. Required unless paying a mobile money wallet"),
+  bankCountry: z
+    .string()
+    .optional()
+    .describe(
+      "Bank country, ISO 2-letter (e.g. 'AU', 'US'). For mobile money, the country of the wallet"
+    ),
   bankCurrency: z.string().optional().describe("Payout currency, ISO 3-letter (e.g. 'EUR')"),
   recipientType: z
     .enum(["individual", "business"])
@@ -130,7 +178,24 @@ export const bankDestinationShape = {
     .describe(
       `Beneficiary date of birth, YYYY-MM-DD. Required when recipientType is individual for ${ENHANCED_BENEFICIARY_CURRENCIES}`
     ),
-  addressStreet: z.string().optional().describe("Beneficiary street address"),
+  phone: z
+    .string()
+    .optional()
+    .describe("Beneficiary phone number in E.164 format (e.g. '+5215512345678')"),
+  nameInLocalLanguage: z
+    .string()
+    .optional()
+    .describe("Account holder name in the local language (e.g. Chinese characters for CNY)"),
+  nationalIdentificationNumber: z
+    .string()
+    .optional()
+    .describe("National identification number of the account holder"),
+  addressStreet: z
+    .string()
+    .optional()
+    .describe(
+      "Beneficiary street address. Needed, with addressCountry, whenever an address is sent"
+    ),
   addressCity: z.string().optional().describe("Beneficiary city"),
   addressState: z.string().optional().describe("Beneficiary state or region"),
   addressPostalCode: z.string().optional().describe("Beneficiary postal code"),
@@ -139,6 +204,39 @@ export const bankDestinationShape = {
     .optional()
     .describe(
       `Beneficiary country, ISO 2-letter. The complete address is required for ${ENHANCED_BENEFICIARY_CURRENCIES}`
+    ),
+  bankAddressStreet: z
+    .string()
+    .optional()
+    .describe(
+      "Street address of the beneficiary's bank. A bank address is required for a USD SWIFT payout to an account the paying customer does not hold; street and country at minimum"
+    ),
+  bankAddressCity: z.string().optional().describe("City of the beneficiary's bank"),
+  bankAddressState: z.string().optional().describe("State or region of the beneficiary's bank"),
+  bankAddressPostalCode: z.string().optional().describe("Postal code of the beneficiary's bank"),
+  bankAddressCountry: z
+    .string()
+    .optional()
+    .describe("Country of the beneficiary's bank, ISO 2-letter"),
+  walletProvider: z
+    .string()
+    .max(128)
+    .optional()
+    .describe(
+      "Mobile money only: the wallet provider code, as listed for the corridor (e.g. 'mtn_gh'). Requires walletAccount, and every bank field (bankName, accountNumber, iban, bank codes) must be left out"
+    ),
+  walletAccount: z
+    .string()
+    .max(64)
+    .optional()
+    .describe(
+      "Mobile money only: the wallet's identifier, such as its mobile number (e.g. '+233241234567'). Required with walletProvider"
+    ),
+  walletAccountType: z
+    .enum(["mobile_number"])
+    .optional()
+    .describe(
+      "Mobile money only: the kind of identifier in walletAccount. Only needed where the wallet provider accepts more than one"
     ),
   iban: z.string().optional().describe("IBAN (EU/international)"),
   accountNumber: z.string().optional().describe("Bank account number, if not using IBAN"),
@@ -151,6 +249,13 @@ export const bankDestinationShape = {
     .enum(["email", "phone_number", "abn", "acn", "organisation_id"])
     .optional()
     .describe("PayID alias type. Required when payId is given"),
+  branchName: z.string().optional().describe("Bank branch name"),
+  paymentRail: z
+    .enum(["ach", "wire"])
+    .optional()
+    .describe(
+      "USD payouts only: prefer ACH or wire. Omit for the account's default. A rail that is not available is refused"
+    ),
   swiftCode: z.string().optional().describe("SWIFT code"),
   bicCode: z.string().optional().describe("BIC (EUR/GBP international)"),
   routingNumber: z.string().optional().describe("ABA routing number (US)"),
@@ -162,46 +267,211 @@ export const bankDestinationShape = {
   cnaps: z.string().optional().describe("CNAPS (China)"),
 };
 
-type BankDestinationInput = Partial<z.infer<z.ZodObject<typeof bankDestinationShape>>>;
+/**
+ * Supporting details for one payout. They travel with a transfer, whether it pays bank details
+ * or a saved beneficiary, and are never saved on a beneficiary.
+ */
+export const payoutExtrasShape = {
+  logisticsTrackingDetails: z
+    .array(
+      z.object({
+        trackingNumber: z.string().optional().describe("Logistics tracking number"),
+        logisticsProvider: z
+          .object({
+            name: z.string().optional().describe("Logistics provider name"),
+            code: z.string().optional().describe("Logistics provider code"),
+          })
+          .optional(),
+      })
+    )
+    .optional()
+    .describe(
+      "Shipment tracking for the goods the payout pays for. Required, with items, for a CNY bank payout with purposeCode GENERAL_GOODS_TRADES"
+    ),
+  items: z
+    .array(
+      z.object({
+        name: z.string().max(512).describe("Name of the goods"),
+        quantity: z.number().int().min(1).describe("Number of units"),
+        unitPrice: z
+          .string()
+          .describe(
+            "Price of one unit in the destination currency, major units, as a decimal string (e.g. '20.00')"
+          ),
+        description: z.string().max(512).optional().describe("Free-text description of the goods"),
+      })
+    )
+    .min(1)
+    .optional()
+    .describe(
+      "Goods the payout pays for, as invoice lines. Required, with logisticsTrackingDetails, for a CNY bank payout with purposeCode GENERAL_GOODS_TRADES"
+    ),
+  documents: z
+    .array(
+      z.object({
+        type: z.enum(["invoice", "contract", "other"]).describe("Document type"),
+        base64Url: z
+          .string()
+          .describe("The document as a base64 data URI (e.g. 'data:application/pdf;base64,...')"),
+      })
+    )
+    .optional()
+    .describe("Supporting documents for the payout, such as an invoice or contract"),
+};
+
+type BankDestinationInput = Partial<
+  z.infer<z.ZodObject<typeof bankDestinationShape & typeof payoutExtrasShape>>
+>;
+
+/**
+ * The bank fields a mobile money destination must not carry (the API's
+ * MOBILE_MONEY_REFUSED_BANK_FIELDS, by input name): a wallet has no bank account, name or code.
+ */
+const MOBILE_MONEY_REFUSED_INPUTS = [
+  "accountNumber",
+  "iban",
+  "bankName",
+  "branchName",
+  "bankAddressStreet",
+  "bankAddressCity",
+  "bankAddressState",
+  "bankAddressPostalCode",
+  "bankAddressCountry",
+  "accountType",
+  "swiftCode",
+  "bicCode",
+  "ifscCode",
+  "routingNumber",
+  "sortCode",
+  "branchCode",
+  "bsbCode",
+  "bankCode",
+  "cnaps",
+  "payId",
+  "payIdType",
+  "paymentRail",
+] as const satisfies readonly (keyof BankDestinationInput)[];
+
+/**
+ * An address as the API takes one: street and country always, the rest where the corridor asks.
+ * Half an address used to be dropped here without a word, which read as "address missing" from
+ * the API; now whatever was given is sent, or refused with the reason.
+ */
+function buildAddress(
+  label: string,
+  prefix: "address" | "bankAddress",
+  parts: {
+    street?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    country?: string;
+  }
+): BeneficiaryAddress | undefined {
+  if (!Object.values(parts).some(Boolean)) return undefined;
+  if (!parts.street || !parts.country) {
+    throw new Error(
+      `${label} needs at least ${prefix}Street and ${prefix}Country; city, state and postal code are sent when given`
+    );
+  }
+  return {
+    street: parts.street,
+    ...(parts.city && { city: parts.city }),
+    ...(parts.state && { state: parts.state }),
+    ...(parts.postalCode && { postal_code: parts.postalCode }),
+    country: parts.country,
+  };
+}
+
+/** The per-payout extras, in wire form. Shared by bank and saved-beneficiary destinations. */
+export function buildPayoutExtras(input: BankDestinationInput): PayoutExtras {
+  return {
+    ...(input.logisticsTrackingDetails && {
+      logistics_tracking_details: input.logisticsTrackingDetails.map((detail) => ({
+        ...(detail.trackingNumber && { tracking_number: detail.trackingNumber }),
+        ...(detail.logisticsProvider && { logistics_provider: detail.logisticsProvider }),
+      })),
+    }),
+    ...(input.items && {
+      items: input.items.map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        unit_price: item.unitPrice,
+        ...(item.description && { description: item.description }),
+      })),
+    }),
+    ...(input.documents && {
+      documents: input.documents.map((document) => ({
+        type: document.type,
+        base64_url: document.base64Url,
+      })),
+    }),
+  };
+}
 
 export function buildBankDestination(input: BankDestinationInput): BankTransferDestination {
-  if (!input.accountHolderName || !input.bankName || !input.bankCountry || !input.bankCurrency) {
+  // Any wallet field makes this a mobile money destination, as the API reads it.
+  const wallet = Boolean(input.walletProvider || input.walletAccount || input.walletAccountType);
+  if (wallet) {
+    if (!input.accountHolderName || !input.bankCountry || !input.bankCurrency) {
+      throw new Error(
+        "A mobile money destination needs accountHolderName, bankCountry (the wallet's country) and bankCurrency"
+      );
+    }
+    if (!input.walletProvider || !input.walletAccount) {
+      throw new Error("A mobile money destination needs both walletProvider and walletAccount");
+    }
+    const refused = MOBILE_MONEY_REFUSED_INPUTS.filter((field) => input[field]);
+    if (refused.length > 0) {
+      throw new Error(`A mobile money wallet takes no bank fields. Remove: ${refused.join(", ")}`);
+    }
+  } else if (
+    !input.accountHolderName ||
+    !input.bankName ||
+    !input.bankCountry ||
+    !input.bankCurrency
+  ) {
     throw new Error(
       "A bank destination needs accountHolderName, bankName, bankCountry and bankCurrency"
     );
   }
-  // Sent only when complete. Each sub-field is validated separately, so
-  // half an address is rejected the same as none but is harder to debug.
-  const hasAddress = Boolean(
-    input.addressStreet &&
-    input.addressCity &&
-    input.addressState &&
-    input.addressPostalCode &&
-    input.addressCountry
-  );
+
+  const address = buildAddress("A beneficiary address", "address", {
+    street: input.addressStreet,
+    city: input.addressCity,
+    state: input.addressState,
+    postalCode: input.addressPostalCode,
+    country: input.addressCountry,
+  });
+  const bankAddress = buildAddress("A bank address", "bankAddress", {
+    street: input.bankAddressStreet,
+    city: input.bankAddressCity,
+    state: input.bankAddressState,
+    postalCode: input.bankAddressPostalCode,
+    country: input.bankAddressCountry,
+  });
 
   return {
     type: "bank",
     account_holder_name: input.accountHolderName,
-    bank_name: input.bankName,
+    ...(input.bankName && { bank_name: input.bankName }),
     bank_country: input.bankCountry,
     currency: input.bankCurrency,
     ...(input.recipientType && { recipient_type: input.recipientType }),
     ...(input.dateOfBirth && { date_of_birth: input.dateOfBirth }),
-    ...(hasAddress && {
-      address: {
-        street: input.addressStreet as string,
-        city: input.addressCity as string,
-        state: input.addressState as string,
-        postal_code: input.addressPostalCode as string,
-        country: input.addressCountry as string,
-      },
-    }),
+    ...(input.phone && { phone: input.phone }),
+    ...(address && { address }),
+    ...(bankAddress && { bank_address: bankAddress }),
     ...(input.iban && { iban: input.iban }),
     ...(input.accountNumber && { account_number: input.accountNumber }),
     ...(input.accountType && { account_type: input.accountType }),
     ...(input.payId && { pay_id: input.payId }),
     ...(input.payIdType && { pay_id_type: input.payIdType }),
+    ...(input.walletProvider && { wallet_provider: input.walletProvider }),
+    ...(input.walletAccount && { wallet_account: input.walletAccount }),
+    ...(input.walletAccountType && { wallet_account_type: input.walletAccountType }),
+    ...(input.branchName && { branch_name: input.branchName }),
+    ...(input.paymentRail && { payment_rail: input.paymentRail }),
     ...(input.swiftCode && { swift_code: input.swiftCode }),
     ...(input.bicCode && { bic_code: input.bicCode }),
     ...(input.routingNumber && { aba_code: input.routingNumber }),
@@ -211,7 +481,66 @@ export function buildBankDestination(input: BankDestinationInput): BankTransferD
     ...(input.bankCode && { bank_code: input.bankCode }),
     ...(input.branchCode && { branch_code: input.branchCode }),
     ...(input.cnaps && { cnaps: input.cnaps }),
+    ...(input.nameInLocalLanguage && { name_in_local_language: input.nameInLocalLanguage }),
+    ...(input.nationalIdentificationNumber && {
+      national_identification_number: input.nationalIdentificationNumber,
+    }),
+    ...buildPayoutExtras(input),
   };
+}
+
+/** Tracking, payment reference, hold and refund lines for get_transfer; empty when none apply. */
+function transferExtras(transfer: Transfer): string {
+  const lines: string[] = [];
+  if (transfer.payment_reference) lines.push(`Payment Reference: ${transfer.payment_reference}`);
+  if (transfer.account_ownership) lines.push(`Account Ownership: ${transfer.account_ownership}`);
+
+  for (const record of transfer.tracking ?? []) {
+    if (record.data.number) lines.push(`Tracking (${record.type}): ${record.data.number}`);
+    const file = record.data.file;
+    if (file) {
+      lines.push(`Tracking (${record.type}): ${file.name} (${file.media_type})`, file.content);
+    }
+  }
+
+  const hold = transfer.compliance_hold;
+  if (hold) {
+    lines.push(`Compliance Hold (RFI ${hold.rfi_id}; see 'get_rfi'):`);
+    for (const reason of hold.reasons) {
+      lines.push(`  Reason: ${reason.description} (${reason.reason_code})`);
+    }
+    for (const requirement of hold.requirements) {
+      const needs =
+        requirement.required_capability ??
+        requirement.required_level ??
+        requirement.required_evidence;
+      lines.push(
+        `  Requirement: ${requirement.type}${needs ? ` ${needs}` : ""} - ${requirement.status}`
+      );
+    }
+  }
+
+  const refund = transfer.refund;
+  if (refund) {
+    const to =
+      refund.destination.type === "prefund_wallet"
+        ? `your balance wallet ${refund.destination.address} (${refund.destination.network})`
+        : refund.destination.type === "bank_account"
+          ? `bank account ${refund.destination.account_masked}`
+          : "the original source";
+    lines.push(
+      `Refund: ${refund.status}`,
+      `  Amount: ${refund.amount} ${refund.currency} (fee ${refund.fee}, net ${refund.net})`,
+      `  Returned to: ${to}`,
+      `  Requested: ${refund.requested_at}`
+    );
+    if (refund.tx_hash) lines.push(`  Transaction: ${refund.tx_hash}`);
+    if (refund.provider_reference) lines.push(`  Reference: ${refund.provider_reference}`);
+    if (refund.completed_at) lines.push(`  Completed: ${refund.completed_at}`);
+    if (refund.failed_at) lines.push(`  Failed: ${refund.failed_at}`);
+  }
+
+  return lines.length > 0 ? `\n${lines.join("\n")}\n` : "";
 }
 
 export function registerTransferTools(server: McpServer, client: StablesApiClient) {
@@ -223,6 +552,8 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
       "With prefund_balance it debits your organisation's balance and starts the payout immediately, so this moves real money: get explicit human approval first. " +
       `For payouts in ${ENHANCED_BENEFICIARY_CURRENCIES} you must also supply recipientType, the full beneficiary address, and dateOfBirth when the recipient is an individual. ` +
       "To pay one of the organisation's saved beneficiaries, set destinationType to beneficiary and pass its beneficiaryId instead of bank details. " +
+      "The payout network comes from the quote. To pay a mobile money wallet (a mobile_money quote), keep destinationType bank and send walletProvider and walletAccount with accountHolderName, bankCountry and bankCurrency, and no bank fields. " +
+      `${CNY_BANK_GUIDE}. A unionpay quote is a personal remittance to mainland China: purposeCode PERSONAL_REMITTANCE or USER_WITHDRAWAL. ` +
       "For a swap (a quote between two stablecoins or two networks), set destinationType to crypto with destinationCurrency, destinationNetwork and destinationAddress; currency and network must match the quote. A swap is funded by a deposit (fund_transfer) and needs no bank details or purposeCode.",
     {
       customerId: z.string().describe("The customer ID for this transfer"),
@@ -237,10 +568,11 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
         .string()
         .optional()
         .describe(
-          "Saved beneficiary id when destinationType is beneficiary. It supplies the recipient and bank details, so the bank fields are ignored; archived beneficiaries are refused"
+          "Saved beneficiary id when destinationType is beneficiary. It supplies the recipient and bank details, so the bank fields are ignored (logisticsTrackingDetails, items and documents still travel with the payout); archived beneficiaries are refused"
         ),
 
       ...bankDestinationShape,
+      ...payoutExtrasShape,
 
       destinationCurrency: z
         .string()
@@ -265,6 +597,43 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
         .enum(PURPOSE_CODES)
         .optional()
         .describe("Purpose of the transfer (e.g. 'SALARY'). Required on some corridors"),
+      paymentReference: z
+        .string()
+        .max(35)
+        .optional()
+        .describe(
+          "Text sent with a bank payout so the recipient can tell what it is for, such as an invoice number. Up to 35 characters: letters, digits, spaces and / - ? : ( ) . , ' + only. Some payouts carry less and refuse a reference that does not fit. No effect on a crypto destination"
+        ),
+      accountOwnership: z
+        .enum(["first_party", "third_party"])
+        .optional()
+        .describe(
+          "Whose bank account the payout pays: the customer's own (first_party) or someone else's (third_party). A third_party payout needs a purposeCode, and is refused where this type of customer may only pay their own account. No effect on a crypto destination"
+        ),
+      sourceWallet: z
+        .object({
+          type: z
+            .enum(["hosted", "self_hosted"])
+            .describe(
+              "hosted when the sending wallet belongs to an exchange or other VASP, self_hosted when the customer controls the keys"
+            ),
+          vaspId: z
+            .string()
+            .max(64)
+            .optional()
+            .describe(
+              "Travel Rule directory id of the VASP hosting the wallet, when type is hosted"
+            ),
+          vaspName: z
+            .string()
+            .max(200)
+            .optional()
+            .describe("Name of the VASP hosting the wallet, when type is hosted"),
+        })
+        .optional()
+        .describe(
+          "Custody of the wallet the customer will send from, for the travel rule. Defaults to self_hosted when omitted"
+        ),
       fundingSource: z
         .enum(["fund_transfer", "prefund_balance"])
         .optional()
@@ -297,7 +666,11 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
           if (!input.beneficiaryId) {
             throw new Error("A beneficiary destination needs beneficiaryId");
           }
-          destination = { type: "beneficiary", beneficiary_id: input.beneficiaryId };
+          destination = {
+            type: "beneficiary",
+            beneficiary_id: input.beneficiaryId,
+            ...buildPayoutExtras(input),
+          };
         } else {
           destination = buildBankDestination(input);
         }
@@ -307,7 +680,16 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
           quote_id: input.quoteId,
           destination,
           ...(input.purposeCode && { purpose_code: input.purposeCode }),
+          ...(input.paymentReference && { payment_reference: input.paymentReference }),
+          ...(input.accountOwnership && { account_ownership: input.accountOwnership }),
           ...(input.fundingSource && { funding_source: input.fundingSource }),
+          ...(input.sourceWallet && {
+            source_wallet: {
+              type: input.sourceWallet.type,
+              ...(input.sourceWallet.vaspId && { vasp_id: input.sourceWallet.vaspId }),
+              ...(input.sourceWallet.vaspName && { vasp_name: input.sourceWallet.vaspName }),
+            },
+          }),
           ...(input.metadata && { metadata: input.metadata }),
         });
 
@@ -354,20 +736,31 @@ Use 'get_transfer' to check the status.`,
   // Validate Payment Method
   server.tool(
     "validate_payment_method",
-    "Check bank payout details against the corridor's rules without creating anything. Use it before create_transfer to find out which fields a currency needs (beneficiary address, date of birth, bank codes), instead of spending a short-lived quote on a rejected transfer.",
+    "Check payout details (a bank account or a mobile money wallet) against the corridor's rules without creating anything. Use it before create_transfer to find out which fields a currency and network need (beneficiary address, date of birth, bank codes, wallet details), instead of spending a short-lived quote on a rejected transfer. " +
+      `Networks: ${PAYOUT_NETWORK_GUIDE}. ${CNY_BANK_GUIDE}.`,
     {
       network: z
-        .enum(["bank", "swift", "payid"])
-        .describe("Payout network: local bank rails, SWIFT, or PayID (AUD)"),
+        .enum(PAYOUT_NETWORKS)
+        .describe(
+          "Payout network to validate against: bank (default domestic scheme), swift, payid (AUD), mobile_money, or a named domestic scheme"
+        ),
       quoteId: z.string().optional().describe("Validate against this quote's corridor"),
+      purposeCode: z
+        .enum(PURPOSE_CODES)
+        .optional()
+        .describe(
+          "The purpose the transfer will carry. Some corridors ask for different supporting details per purpose (CNY: logisticsTrackingDetails and items for goods trade, a document for services); without it every such detail is required"
+        ),
       ...bankDestinationShape,
+      ...payoutExtrasShape,
     },
-    async ({ network, quoteId, ...input }) => {
+    async ({ network, quoteId, purposeCode, ...input }) => {
       try {
         const result = await client.validatePaymentMethod(
           network,
           buildBankDestination(input),
-          quoteId
+          quoteId,
+          purposeCode
         );
         if (result.valid) {
           return {
@@ -400,7 +793,7 @@ Use 'get_transfer' to check the status.`,
   // Get Transfer
   server.tool(
     "get_transfer",
-    "Get the current status and details of a transfer",
+    "Get the current status and details of a transfer, including its payment reference, a SWIFT payout's tracking (UETR, then the MT103 once issued), an open compliance hold and any refund",
     {
       transferId: z.string().describe("The transfer ID to look up"),
     },
@@ -423,7 +816,7 @@ Quote ID: ${transfer.quote_id}
 
 Created: ${transfer.created_at}
 Updated: ${transfer.updated_at}
-${depositBlock(transfer)}
+${transferExtras(transfer)}${depositBlock(transfer)}
 
 ${statusInfo}`,
             },
@@ -461,6 +854,9 @@ ${statusInfo}`,
           "failed",
           "cancelled",
           "expired",
+          "refund_pending",
+          "refunded",
+          "refund_failed",
         ])
         .optional()
         .describe("Filter by transfer status"),

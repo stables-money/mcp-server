@@ -58,6 +58,27 @@ const DOCUMENTED_NOT_EXPOSED: Record<string, string> = {};
 
 const UUID = "11111111-1111-4111-8111-111111111111";
 
+/**
+ * Inputs a tool refuses alongside the rest of its fields, so they are left out of the generated
+ * all-fields input: a mobile money wallet takes no bank fields, and a quote takes one amount.
+ * EXTRA_CASES sends each of them on its own.
+ */
+const EXCLUSIVE_INPUTS = [
+  "walletProvider",
+  "walletAccount",
+  "walletAccountType",
+  "destinationAmount",
+];
+
+const MOBILE_MONEY_WALLET = {
+  accountHolderName: "Kwame Mensah",
+  bankCountry: "GH",
+  bankCurrency: "GHS",
+  walletProvider: "mtn_gh",
+  walletAccount: "+233241234567",
+  walletAccountType: "mobile_number",
+};
+
 /** Extra inputs for tools whose branches a single generated input cannot reach. */
 const EXTRA_CASES: Record<string, Json[]> = {
   list_payment_routes: [{}], // no customerId: the list across every customer
@@ -105,8 +126,20 @@ const EXTRA_CASES: Record<string, Json[]> = {
       destinationCurrency: "USDC",
       destinationNetwork: "base",
     },
+    // Exact-out: the destination amount is fixed and the source amount is quoted.
+    {
+      sourceCurrency: "USDT",
+      sourceNetwork: "tron",
+      destinationCurrency: "GHS",
+      destinationCountry: "GH",
+      destinationNetwork: "mobile_money",
+      destinationAmount: "100",
+    },
   ],
+  validate_payment_method: [{ network: "mobile_money", ...MOBILE_MONEY_WALLET }],
+  create_beneficiary: [{ network: "mobile_money", ...MOBILE_MONEY_WALLET }],
   create_transfer: [
+    { customerId: UUID, quoteId: UUID, ...MOBILE_MONEY_WALLET },
     {
       customerId: UUID,
       quoteId: UUID,
@@ -193,6 +226,7 @@ function deref(schema: Json, root: Json): Json {
 /** One input with every field, plus one per alternative value of each top-level enum. */
 function inputsFor(schema: Json): Json[] {
   const full = sample(schema, schema) as Json;
+  for (const name of EXCLUSIVE_INPUTS) delete full[name];
   const cases = [full];
   for (const [key, value] of Object.entries<Json>(schema.properties ?? {})) {
     for (const option of (value.enum ?? []).slice(1)) cases.push({ ...full, [key]: option });

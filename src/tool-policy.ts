@@ -86,12 +86,16 @@ const CURRENT_TOOL_POLICY: Record<string, ToolPolicy> = {
   archive_beneficiary: write("Archive saved beneficiary", { idempotent: true }),
 
   // Payment routes (API: /payment-routes, formerly /virtual-accounts)
-  create_payment_route: write("Create payment route"),
+  // An off-ramp or swap route pays a third party on every deposit, without a further call.
+  create_payment_route: write("Create payment route", { openWorld: true }),
   get_payment_route: read("Get payment route"),
   list_payment_routes: read("List payment routes"),
   update_payment_route: write("Update payment route", { idempotent: true }),
   set_payment_route_status: write("Turn payment route off or on", { idempotent: true }),
-  update_route_destination: write("Change payment route destination", { idempotent: true }),
+  update_route_destination: write("Change payment route destination", {
+    idempotent: true,
+    openWorld: true,
+  }),
   get_payment_route_history: read("Get payment route history"),
   list_route_whitelist: read("List payment route allowed senders"),
   add_route_whitelist_account: write("Add payment route allowed sender"),

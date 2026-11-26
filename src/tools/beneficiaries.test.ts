@@ -144,6 +144,88 @@ describe("beneficiary tools", () => {
     });
   });
 
+  it("create_beneficiary saves a mobile money wallet, and shows it without a bank", async () => {
+    const wallet = beneficiary({
+      label: null,
+      network: "mobile_money",
+      destination: {
+        type: "bank",
+        account_holder_name: "Kwame Mensah",
+        bank_country: "GH",
+        currency: "GHS",
+        wallet_provider: "mtn_gh",
+        wallet_account: "+233241234567",
+      },
+    });
+    fetchSpy.mockResolvedValueOnce(json(wallet));
+    const { result, text } = await call("create_beneficiary", {
+      network: "mobile_money",
+      accountHolderName: "Kwame Mensah",
+      bankCountry: "GH",
+      bankCurrency: "GHS",
+      walletProvider: "mtn_gh",
+      walletAccount: "+233241234567",
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(JSON.parse(request().init.body as string)).toEqual({
+      network: "mobile_money",
+      destination: {
+        type: "bank",
+        account_holder_name: "Kwame Mensah",
+        bank_country: "GH",
+        currency: "GHS",
+        wallet_provider: "mtn_gh",
+        wallet_account: "+233241234567",
+      },
+    });
+    expect(text).toContain("Wallet: mtn_gh +233241234567, GH");
+    expect(text).not.toContain("undefined");
+
+    fetchSpy.mockResolvedValueOnce(
+      json({ beneficiaries: [wallet], page: { next_page_token: "", total: 1 } })
+    );
+    const list = await call("list_beneficiaries", { network: "mobile_money" });
+    expect(list.text).toContain("GHS by mobile_money, mtn_gh (active)");
+  });
+
+  it("create_beneficiary and list_beneficiaries take unionpay", async () => {
+    fetchSpy.mockResolvedValueOnce(json(beneficiary({ network: "unionpay" })));
+    const { result } = await call("create_beneficiary", {
+      network: "unionpay",
+      accountHolderName: "Zhang Wei",
+      bankName: "Bank of China",
+      bankCountry: "CN",
+      bankCurrency: "CNY",
+      accountNumber: "6222000000000000",
+      nationalIdentificationNumber: "110101199003070000",
+    });
+    expect(result.isError).toBeFalsy();
+    const body = JSON.parse(request().init.body as string);
+    expect(body.network).toBe("unionpay");
+    expect(body.destination.national_identification_number).toBe("110101199003070000");
+
+    fetchSpy.mockResolvedValueOnce(
+      json({ beneficiaries: [], page: { next_page_token: "", total: 0 } })
+    );
+    await call("list_beneficiaries", { network: "unionpay" });
+    expect(new URL(fetchSpy.mock.calls[1][0] as string).searchParams.get("network")).toBe(
+      "unionpay"
+    );
+  });
+
+  it("create_beneficiary does not offer per-payout goods details", async () => {
+    const { tools } = await client.listTools();
+    const properties = (
+      tools.find((t) => t.name === "create_beneficiary")!.inputSchema as {
+        properties: Record<string, unknown>;
+      }
+    ).properties;
+    expect(properties.walletProvider).toBeDefined();
+    expect(properties.items).toBeUndefined();
+    expect(properties.documents).toBeUndefined();
+  });
+
   it("create_beneficiary refuses missing bank basics before calling the API", async () => {
     const { result } = await call("create_beneficiary", { network: "swift", bankName: "X" });
     expect(result.isError).toBe(true);
