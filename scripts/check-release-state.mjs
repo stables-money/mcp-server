@@ -11,7 +11,8 @@
  *      older than the grace period that never made it into a published version.
  *   2. The latest GitHub Release actually reached npm.
  *   3. The hosted server at mcp.stables.money reports the same version and
- *      still answers GET /mcp with 405 (the reconnect-loop guard).
+ *      still answers a signed-in GET /mcp with 405 (the reconnect-loop guard)
+ *      and an anonymous one with the 401 sign-in challenge.
  *
  * Needs full git history and tags (actions/checkout with fetch-depth: 0).
  * GITHUB_TOKEN is optional; it only lifts the API rate limit.
@@ -121,11 +122,23 @@ try {
     );
   }
 
-  const get = await fetch(HOSTED_URL, { headers: { accept: "text/event-stream" } });
+  // The guard is for a caller that is signed in: without credentials the OAuth
+  // layer answers first, with the 401 challenge that tells clients how to sign in.
+  const get = await fetch(HOSTED_URL, {
+    headers: { accept: "text/event-stream", authorization: "Bearer sti_test_freshness_check" },
+  });
   await get.body?.cancel();
   if (get.status !== 405) {
     problems.push(
-      `GET ${HOSTED_URL} answered ${get.status}, expected 405. Clients will reconnect in a loop and burn the Workers quota.`
+      `GET ${HOSTED_URL} with credentials answered ${get.status}, expected 405. Clients will reconnect in a loop and burn the Workers quota.`
+    );
+  }
+
+  const anonymous = await fetch(HOSTED_URL, { headers: { accept: "text/event-stream" } });
+  await anonymous.body?.cancel();
+  if (anonymous.status !== 401 || !anonymous.headers.get("www-authenticate")) {
+    problems.push(
+      `GET ${HOSTED_URL} without credentials answered ${anonymous.status}, expected 401 with a WWW-Authenticate challenge. Clients cannot discover how to sign in.`
     );
   }
 } catch (error) {
