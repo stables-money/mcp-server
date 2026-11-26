@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.6.14] - 2026-11-26
+
+### Added
+- Swaps: `create_quote` prices a swap between stablecoins and networks (USDT
+  or USDC on both sides, `sourceNetwork` and `destinationNetwork` both
+  blockchain networks) and shows its orchestration fee. `create_transfer`
+  creates the swap with `destinationType: crypto`, and `list_transfers`
+  filters by `type: swap`.
+- `create_payment_route` creates swap routes: set `workflowType` to
+  `crypto_to_crypto` for a permanent USDT or USDC address whose deposits are
+  delivered to a wallet as another stablecoin, on another network, or both.
+- `simulate_route_deposit` (sandbox) covers swap routes.
+
+### Changed
+- Payment route tools are named for payment routes and call
+  `/payment-routes`: `create_payment_route`, `get_payment_route`,
+  `list_payment_routes`, `update_payment_route`, `set_payment_route_status`
+  and `get_payment_route_history`. The old `*_virtual_account*` names still
+  work as deprecated aliases.
+
 ## [2.6.13] - 2026-11-16
 
 ### Added
