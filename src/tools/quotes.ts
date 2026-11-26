@@ -42,6 +42,10 @@ function feeLines(quote: Quote): string {
     out += `\n  Network Fee: ${fees.network_fee.amount} ${fees.network_fee.currency}`;
   if (fees.integrator_fee)
     out += `\n  Integrator Fee: ${fees.integrator_fee.amount} ${fees.integrator_fee.currency}`;
+  // A swap's chain costs are returned only here, so without this line the total would not add up.
+  const orchestration = fees.stables_fees?.orchestration_fee;
+  if (orchestration)
+    out += `\n  Orchestration Fee: ${orchestration.amount} ${orchestration.currency}`;
   return out;
 }
 
@@ -51,19 +55,26 @@ export function registerQuoteTools(server: McpServer, client: StablesApiClient) 
     "create_quote",
     "Get a quote for a currency exchange: the rate, the fees, and what the customer receives. Quotes are short-lived, so create one immediately before the transfer. " +
       "Off-ramp converts a stablecoin to fiat (source network required, destination country required); on-ramp converts fiat to a stablecoin (destination address required). " +
+      "A swap converts a stablecoin to another stablecoin and/or moves it to another network: USDT or USDC on both sides, sourceNetwork and destinationNetwork both blockchain networks, no destinationCountry. The same stablecoin on the same network is refused. " +
       "Set preview to price without committing.",
     {
       sourceCurrency: z
         .string()
-        .describe("Source currency: a stablecoin for off-ramp (e.g. 'USDT'), fiat for on-ramp"),
+        .describe(
+          "Source currency: a stablecoin for off-ramp or swap (e.g. 'USDT'), fiat for on-ramp"
+        ),
       sourceAmount: z.string().describe("Amount to convert, in major units (e.g. '125.75')"),
       sourceNetwork: z
         .enum(LIVE_NETWORKS)
         .optional()
-        .describe("Blockchain network of the source. Required for off-ramp, omitted for on-ramp"),
+        .describe(
+          "Blockchain network of the source. Required for off-ramp and swap, omitted for on-ramp"
+        ),
       destinationCurrency: z
         .string()
-        .describe("Destination currency: fiat for off-ramp (e.g. 'EUR'), a stablecoin for on-ramp"),
+        .describe(
+          "Destination currency: fiat for off-ramp (e.g. 'EUR'), a stablecoin for on-ramp or swap (e.g. 'USDC')"
+        ),
       destinationCountry: z
         .string()
         .optional()
@@ -72,7 +83,7 @@ export function registerQuoteTools(server: McpServer, client: StablesApiClient) 
         .string()
         .optional()
         .describe(
-          "Off-ramp: payment network, 'swift' or 'bank'. On-ramp: blockchain network. Replaces the old paymentMethodType"
+          "Off-ramp: payment network, 'swift' or 'bank'. On-ramp and swap: the blockchain network to deliver on (required for a swap, e.g. 'base'). Replaces the old paymentMethodType"
         ),
       destinationAddress: z
         .string()

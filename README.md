@@ -41,12 +41,12 @@ This MCP server provides 57 tools across 12 categories, one for every operation 
 - `delete_document` - Remove a document
 
 ### Quotes
-- `create_quote` - Get exchange rate quotes (USDC/USDT to fiat)
+- `create_quote` - Get quotes: a stablecoin to fiat, or a swap between stablecoins and networks
 - `get_quote` - Check quote status and details
 
 ### Transfers
 - `validate_payment_method` - Check payout details against a corridor's rules before transferring
-- `create_transfer` - Execute a transfer using an active quote, paid by deposit or from your balance
+- `create_transfer` - Execute a transfer using an active quote: a bank payout paid by deposit or from your balance, or a swap delivered to a wallet
 - `get_transfer` - Check transfer status
 - `list_transfers` - List transfers with filters
 
@@ -57,7 +57,7 @@ This MCP server provides 57 tools across 12 categories, one for every operation 
 - `archive_beneficiary` - Archive a beneficiary so it can no longer be paid
 
 ### Payment Routes
-- `create_payment_route` - Create payment routes: virtual bank accounts for fiat deposits, or off-ramp routes (a permanent USDT/USDC address paid out to a bank account)
+- `create_payment_route` - Create payment routes: virtual bank accounts for fiat deposits, off-ramp routes (a permanent USDT/USDC address paid out to a bank account), or swap routes (a permanent USDT/USDC address delivered to a wallet as another stablecoin or on another network)
 - `get_payment_route` - Get one payment route, including its deposit instructions
 - `set_payment_route_status` - Turn a payment route off (no new deposits) or back on
 - `list_payment_routes` - List payment routes for a customer, or across all customers
@@ -277,6 +277,17 @@ STABLES_API_KEY=your-api-key node build/index.js
 **AI (using MCP tools):**
 1. Calls `create_payment_route` with the customer ID, AUD source currency, and the Polygon destination (the payout address is mandatory)
 2. Returns the deposit instructions to share with the customer
+
+### Swapping stablecoins across networks
+
+**User:** "Quote 150 USDT on Tron to USDC on Base for customer abc123, delivered to 0x..."
+
+**AI (using MCP tools):**
+1. Calls `create_quote` with source USDT + `sourceNetwork` tron, destination USDC + `destinationNetwork` base (no country)
+2. Shows the rate, the fees and what arrives, then calls `create_transfer` with `destinationType` crypto and the wallet address
+3. Returns the deposit address the USDT must be sent to
+
+For a permanent address that swaps every deposit, `create_payment_route` with `workflowType` crypto_to_crypto does the same without a quote per payment.
 
 ### Paying out to a European beneficiary
 

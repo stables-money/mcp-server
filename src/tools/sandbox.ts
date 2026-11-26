@@ -13,7 +13,7 @@ import { StablesApiClient } from "../lib/stables-client.js";
 export function registerSandboxTools(server: McpServer, client: StablesApiClient) {
   server.tool(
     "simulate_route_deposit",
-    "SANDBOX ONLY. Simulate a deposit into a payment route so you can watch the conversion and payout complete without real money: a fiat deposit for an on-ramp or fiat-to-fiat route, or the route's USDT/USDC arriving on its address for an off-ramp (crypto_to_fiat) route. Fails on production.",
+    "SANDBOX ONLY. Simulate a deposit into a payment route so you can watch the conversion and payout complete without real money: a fiat deposit for an on-ramp or fiat-to-fiat route, or the route's USDT/USDC arriving on its address for an off-ramp (crypto_to_fiat) or swap (crypto_to_crypto) route. Fails on production.",
     {
       customerId: z.string().describe("The customer ID"),
       virtualAccountId: z.string().describe("The payment route ID"),
@@ -31,7 +31,7 @@ export function registerSandboxTools(server: McpServer, client: StablesApiClient
         .string()
         .optional()
         .describe(
-          "Payment reference on the deposit; for an off-ramp route, the sending wallet address"
+          "Payment reference on the deposit; for an off-ramp or swap route, the sending wallet address"
         ),
       externalDepositId: z.string().optional().describe("Your own reference for this deposit"),
     },

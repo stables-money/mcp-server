@@ -141,6 +141,86 @@ describe("payment route tools", () => {
     expect(text(result)).not.toContain("undefined");
   });
 
+  it("creates a swap route delivering another stablecoin on another network", async () => {
+    const result = await client.callTool({
+      name: "create_payment_route",
+      arguments: {
+        customerId: "cus_1",
+        workflowType: "crypto_to_crypto",
+        sourceCurrency: "usdt",
+        sourceNetwork: "tron",
+        destinationCurrency: "usdc",
+        destinationPaymentRail: "base",
+        destinationAddress: "0x2f61a3b4c5d6e7f809a1b2c38f3a2b1c4d5ec386",
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(sentBody()).toEqual({
+      source: { currency: "USDT", network: "tron" },
+      workflow_type: "crypto_to_crypto",
+      destination: {
+        currency: "usdc",
+        payment_rail: "base",
+        address: "0x2f61a3b4c5d6e7f809a1b2c38f3a2b1c4d5ec386",
+      },
+    });
+  });
+
+  it("creates a swap route that only changes the network", async () => {
+    const result = await client.callTool({
+      name: "create_payment_route",
+      arguments: {
+        customerId: "cus_1",
+        workflowType: "crypto_to_crypto",
+        sourceCurrency: "USDT",
+        sourceNetwork: "tron",
+        destinationPaymentRail: "ethereum",
+        destinationAddress: "0x2f61a3b4c5d6e7f809a1b2c38f3a2b1c4d5ec386",
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(sentBody().destination).toEqual({
+      currency: "usdt",
+      payment_rail: "ethereum",
+      address: "0x2f61a3b4c5d6e7f809a1b2c38f3a2b1c4d5ec386",
+    });
+  });
+
+  it("refuses a swap route with the same stablecoin on the same network", async () => {
+    const result = await client.callTool({
+      name: "create_payment_route",
+      arguments: {
+        customerId: "cus_1",
+        workflowType: "crypto_to_crypto",
+        sourceCurrency: "USDT",
+        sourceNetwork: "tron",
+        destinationPaymentRail: "tron",
+        destinationAddress: "TNz1FBKKAKZnYe76rH9XwhKt57PzoMGKyX",
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain("must change the stablecoin, the network or both");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("refuses a swap route without a destination wallet", async () => {
+    const result = await client.callTool({
+      name: "create_payment_route",
+      arguments: {
+        customerId: "cus_1",
+        workflowType: "crypto_to_crypto",
+        sourceCurrency: "USDT",
+        sourceNetwork: "tron",
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("creates an off-ramp route to a domestic bank account without a SWIFT code", async () => {
     const result = await client.callTool({
       name: "create_payment_route",

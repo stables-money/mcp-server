@@ -276,7 +276,8 @@ function pageQuery(params?: Record<string, string | number | undefined>): string
 // only api-keys and webhooks are camelCase. Types below mirror the wire exactly
 // so nothing has to be remembered at the call site.
 
-export type TransferType = "offramp" | "onramp";
+/** `swap` is crypto to crypto: another stablecoin and/or another network, delivered to a wallet. */
+export type TransferType = "offramp" | "onramp" | "swap";
 
 export type TransferStatus =
   | "created"
@@ -479,7 +480,7 @@ export interface VirtualAccountDepositInstructions {
   account_holder_name?: string;
 }
 
-/** A crypto_to_fiat (off-ramp) route's permanent deposit address. */
+/** A crypto_to_fiat (off-ramp) or crypto_to_crypto (swap) route's permanent deposit address. */
 export interface CryptoDepositInstructions {
   type: "crypto";
   wallet_address: string;
@@ -487,7 +488,11 @@ export interface CryptoDepositInstructions {
   network: string;
 }
 
-export type VirtualAccountWorkflowType = "fiat_to_crypto" | "fiat_to_fiat" | "crypto_to_fiat";
+export type VirtualAccountWorkflowType =
+  | "fiat_to_crypto"
+  | "fiat_to_fiat"
+  | "crypto_to_fiat"
+  | "crypto_to_crypto";
 
 export interface VirtualAccount {
   id: string;
@@ -519,10 +524,11 @@ export interface VirtualAccount {
 export interface CreateVirtualAccountRequest {
   /**
    * `payment_rail: "swift"` opens a SWIFT collection account (fiat_to_crypto, business customers
-   * only). `network` is crypto_to_fiat only: the chain the deposit address is issued on.
+   * only). `network` is crypto_to_fiat and crypto_to_crypto only: the chain the deposit address is
+   * issued on.
    */
   source: { currency: string; payment_rail?: "swift"; network?: PaymentRail };
-  /** Required for fiat_to_crypto, which is the default. */
+  /** Required for fiat_to_crypto (the default) and crypto_to_crypto: the wallet deposits go to. */
   destination?: VirtualAccountDestination;
   workflow_type?: VirtualAccountWorkflowType;
   /** crypto_to_fiat: the bank account every deposit is paid out to. */
@@ -758,6 +764,13 @@ export interface FeeBreakdown {
   payment_method_fee?: CurrencyAmount;
   network_fee?: CurrencyAmount;
   total_fee: CurrencyAmount;
+  /** What Stables charges, by line. A swap carries its chain costs as `orchestration_fee`. */
+  stables_fees?: {
+    total?: CurrencyAmount;
+    conversion_fee?: CurrencyAmount;
+    processing_fee?: CurrencyAmount;
+    orchestration_fee?: CurrencyAmount;
+  };
 }
 
 export interface Quote {
@@ -775,7 +788,7 @@ export interface Quote {
 export interface CreateQuoteRequest {
   source: {
     currency: string;
-    /** Required for offramp (crypto source); omitted for onramp (fiat source). */
+    /** Required for offramp and swap (crypto source); omitted for onramp (fiat source). */
     network?: string;
     amount: string;
   };
@@ -783,7 +796,7 @@ export interface CreateQuoteRequest {
     currency: string;
     /** Required for offramp. */
     country?: string;
-    /** Offramp: payment network (swift/bank). Onramp: blockchain network. */
+    /** Offramp: payment network (swift/bank). Onramp and swap: blockchain network. */
     network?: string;
     /** Required for onramp. */
     address?: string;

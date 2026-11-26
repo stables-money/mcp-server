@@ -37,6 +37,56 @@ describe("create_transfer", () => {
 
   const sentBody = () => JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
 
+  it("creates a swap to a wallet and describes it as a swap", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: "tr_2",
+          type: "swap",
+          status: "awaiting_funds_collection",
+          customer_id: "cus_1",
+          quote_id: "q_2",
+          created_at: "2026-11-26T00:00:00.000Z",
+          source_deposit_instructions: {
+            wallet_address: "TNz1FBKKAKZnYe76rH9XwhKt57PzoMGKyX",
+            currency: "USDT",
+            network: "tron",
+            amount: "150",
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+
+    const result = await client.callTool({
+      name: "create_transfer",
+      arguments: {
+        customerId: "cus_1",
+        quoteId: "q_2",
+        destinationType: "crypto",
+        destinationCurrency: "USDC",
+        destinationNetwork: "base",
+        destinationAddress: "0x2f61a3b4c5d6e7f809a1b2c38f3a2b1c4d5ec386",
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(sentBody()).toEqual({
+      customer_id: "cus_1",
+      quote_id: "q_2",
+      destination: {
+        type: "crypto",
+        currency: "USDC",
+        network: "base",
+        address: "0x2f61a3b4c5d6e7f809a1b2c38f3a2b1c4d5ec386",
+      },
+    });
+    const out = (result.content as Array<{ text: string }>)[0].text;
+    expect(out).toContain("Swap (Crypto to Crypto)");
+    expect(out).toContain("TNz1FBKKAKZnYe76rH9XwhKt57PzoMGKyX");
+    expect(out).toContain("delivers the swap to the destination wallet");
+  });
+
   it("pays a saved beneficiary by id, without bank details", async () => {
     const result = await client.callTool({
       name: "create_transfer",

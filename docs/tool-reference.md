@@ -193,16 +193,16 @@ Send further verification data Stables asked for on a requested entitlement. The
 
 #### create_quote
 
-Get a quote for a currency exchange: the rate, the fees, and what the customer receives. Quotes are short-lived, so create one immediately before the transfer. Off-ramp converts a stablecoin to fiat (source network required, destination country required); on-ramp converts fiat to a stablecoin (destination address required). Set preview to price without committing.
+Get a quote for a currency exchange: the rate, the fees, and what the customer receives. Quotes are short-lived, so create one immediately before the transfer. Off-ramp converts a stablecoin to fiat (source network required, destination country required); on-ramp converts fiat to a stablecoin (destination address required). A swap converts a stablecoin to another stablecoin and/or moves it to another network: USDT or USDC on both sides, sourceNetwork and destinationNetwork both blockchain networks, no destinationCountry. The same stablecoin on the same network is refused. Set preview to price without committing.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `sourceCurrency` | string | Yes | Source currency: a stablecoin for off-ramp (e.g. 'USDT'), fiat for on-ramp |
+| `sourceCurrency` | string | Yes | Source currency: a stablecoin for off-ramp or swap (e.g. 'USDT'), fiat for on-ramp |
 | `sourceAmount` | string | Yes | Amount to convert, in major units (e.g. '125.75') |
-| `sourceNetwork` | `arbitrum` \| `avalanche` \| `base` \| `ethereum` \| `optimism` \| `polygon` \| `solana` \| `tron` | No | Blockchain network of the source. Required for off-ramp, omitted for on-ramp |
-| `destinationCurrency` | string | Yes | Destination currency: fiat for off-ramp (e.g. 'EUR'), a stablecoin for on-ramp |
+| `sourceNetwork` | `arbitrum` \| `avalanche` \| `base` \| `ethereum` \| `optimism` \| `polygon` \| `solana` \| `tron` | No | Blockchain network of the source. Required for off-ramp and swap, omitted for on-ramp |
+| `destinationCurrency` | string | Yes | Destination currency: fiat for off-ramp (e.g. 'EUR'), a stablecoin for on-ramp or swap (e.g. 'USDC') |
 | `destinationCountry` | string | No | Destination country, ISO 2-letter. Required for off-ramp |
-| `destinationNetwork` | string | No | Off-ramp: payment network, 'swift' or 'bank'. On-ramp: blockchain network. Replaces the old paymentMethodType |
+| `destinationNetwork` | string | No | Off-ramp: payment network, 'swift' or 'bank'. On-ramp and swap: the blockchain network to deliver on (required for a swap, e.g. 'base'). Replaces the old paymentMethodType |
 | `destinationAddress` | string | No | Destination wallet address. Required for on-ramp |
 | `preview` | boolean | No | Price the quote without persisting it, to show an estimate |
 | `metadata` | object | No | Optional metadata |
@@ -253,13 +253,13 @@ Check bank payout details against the corridor's rules without creating anything
 
 #### create_transfer
 
-Create a transfer from an active quote. The quote must not be expired. With fundingSource fund_transfer (the default) this only creates the transfer and returns deposit instructions; no money moves until someone deposits the funds. With prefund_balance it debits your organisation's balance and starts the payout immediately, so this moves real money: get explicit human approval first. For payouts in AED, CAD, EUR, GBP, MXN, USD you must also supply recipientType, the full beneficiary address, and dateOfBirth when the recipient is an individual. To pay one of the organisation's saved beneficiaries, set destinationType to beneficiary and pass its beneficiaryId instead of bank details.
+Create a transfer from an active quote. The quote must not be expired. With fundingSource fund_transfer (the default) this only creates the transfer and returns deposit instructions; no money moves until someone deposits the funds. With prefund_balance it debits your organisation's balance and starts the payout immediately, so this moves real money: get explicit human approval first. For payouts in AED, CAD, EUR, GBP, MXN, USD you must also supply recipientType, the full beneficiary address, and dateOfBirth when the recipient is an individual. To pay one of the organisation's saved beneficiaries, set destinationType to beneficiary and pass its beneficiaryId instead of bank details. For a swap (a quote between two stablecoins or two networks), set destinationType to crypto with destinationCurrency, destinationNetwork and destinationAddress; currency and network must match the quote. A swap is funded by a deposit (fund_transfer) and needs no bank details or purposeCode.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID for this transfer |
 | `quoteId` | string | Yes | The quote ID to execute |
-| `destinationType` | `bank` \| `crypto` \| `beneficiary` | No | Payout target: a bank account (off-ramp), a wallet address, or a saved beneficiary. Default: `"bank"`. |
+| `destinationType` | `bank` \| `crypto` \| `beneficiary` | No | Payout target: a bank account (off-ramp), a wallet address (swap), or a saved beneficiary. Default: `"bank"`. |
 | `beneficiaryId` | string | No | Saved beneficiary id when destinationType is beneficiary. It supplies the recipient and bank details, so the bank fields are ignored; archived beneficiaries are refused |
 | `accountHolderName` | string | No | Account holder's full name, or the company name when recipientType is business |
 | `bankName` | string | No | Name of the destination bank |
@@ -286,9 +286,9 @@ Create a transfer from an active quote. The quote must not be expired. With fund
 | `bankCode` | string | No | Bank code / institution number (CAD) |
 | `branchCode` | string | No | Branch code / transit number (CAD) |
 | `cnaps` | string | No | CNAPS (China) |
-| `destinationCurrency` | string | No | Stablecoin to deliver when destinationType is crypto (e.g. 'USDT') |
-| `destinationNetwork` | string | No | Blockchain network when destinationType is crypto (e.g. 'polygon') |
-| `destinationAddress` | string | No | Wallet address when destinationType is crypto |
+| `destinationCurrency` | string | No | Stablecoin to deliver when destinationType is crypto (e.g. 'USDT'). Must match the quote's destination currency |
+| `destinationNetwork` | string | No | Blockchain network when destinationType is crypto (e.g. 'polygon'). Must match the quote's destination network |
+| `destinationAddress` | string | No | Wallet address when destinationType is crypto. It must be valid on destinationNetwork: funds sent to a wrong address cannot be recovered |
 | `purposeCode` | `PAYMENT_FOR_SERVICES` \| `PAYMENT_FOR_SOFTWARE` \| `PAYMENT_FOR_IMPORTED_GOODS` \| `TRAVEL_SERVICES` \| `VENDOR_CONTRACTOR_PAYOUTS` \| `TRANSFER_TO_OWN_ACCOUNT` \| `INVESTMENT_IN_SHARES` \| `PURCHASE_OF_PROPERTY` \| `REPAYMENT_OF_LOANS` \| `SALARY` \| `PAYMENT_OF_PROPERTY_RENTAL` \| `INFORMATION_SERVICE_CHARGES` \| `ADVERTISING_PR_EXPENSES` \| `ROYALTY_FEES` \| `BROKER_COMMITMENT_FEES` \| `ADVISOR_TECHNICAL_FEES` \| `REPRESENTATIVE_OFFICE_EXPENSES` \| `TAX_PAYMENT` \| `TRANSPORTATION_FEES_FOR_GOODS` \| `CONSTRUCTION_COSTS` \| `INSURANCE_PREMIUM` \| `GENERAL_GOODS_TRADES` \| `INSURANCE_CLAIMS_PAYMENT` \| `FAMILY_MAINTENANCE` \| `EDUCATION_EXPENSES` \| `MEDICAL_TREATMENT` \| `DONATIONS` \| `MUTUAL_FUND_INVESTMENT` \| `CURRENCY_EXCHANGE` \| `USER_WITHDRAWAL` \| `ADVANCE_PAYMENTS_FOR_GOODS` \| `VENDOR_CONTRACTOR_SOFTWARE_PAYOUTS` \| `MERCHANT_SETTLEMENT` \| `REPATRIATION_FUND_SETTLEMENT` \| `PERSONAL_REMITTANCE` \| `RETURN_OF_FUNDS` | No | Purpose of the transfer (e.g. 'SALARY'). Required on some corridors |
 | `fundingSource` | `fund_transfer` \| `prefund_balance` | No | fund_transfer (default) creates the transfer and returns deposit instructions; nothing moves until a person deposits the funds. prefund_balance debits your organisation's balance and starts the payout immediately, so it needs explicit human approval. Check get_balance first: transfers_enabled must be true and the quote's source asset must be held on its network |
 | `metadata` | object | No | Optional metadata |
@@ -308,7 +308,7 @@ List transfers with optional filters for status, type, or customer
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `status` | `created` \| `compliance_hold` \| `awaiting_funds_collection` \| `funds_collected` \| `in_progress` \| `payment_submitted` \| `payment_processed` \| `completed` \| `failed` \| `cancelled` \| `expired` | No | Filter by transfer status |
-| `type` | `onramp` \| `offramp` | No | Filter by transfer type |
+| `type` | `onramp` \| `offramp` \| `swap` | No | Filter by transfer type. swap is crypto to crypto |
 | `customerId` | string | No | Filter by customer ID |
 | `pageSize` | number | No | Number of transfers per page (default: 20) |
 | `pageToken` | string | No | Token for the next page of results |
@@ -382,18 +382,18 @@ Archive a saved beneficiary. It leaves active listings and is refused as a trans
 
 #### create_payment_route
 
-Create a payment route for a customer. fiat_to_crypto (the default) issues a virtual bank account: fiat deposits convert to a stablecoin and pay out to a wallet, so destinationAddress and destinationPaymentRail are required. Set sourcePaymentRail to 'swift' for a SWIFT collection account: an IBAN that receives international SWIFT transfers, for business customers whose verification is approved and who hold the base_pay_in entitlement; it is not in the customer's name, and settles in USDT on Tron. crypto_to_fiat (an off-ramp route) issues a permanent USDT or USDC deposit address on sourceNetwork: every deposit converts and pays out to one bank account, given as a saved beneficiary (payoutType beneficiary + beneficiaryId) or as bank details. On a crypto_to_fiat route, swiftCode or bicCode is needed only when payoutNetwork is swift. Its deposits are route transactions, read with get_payment_route_history, never transfers. Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_payment_route.
+Create a payment route for a customer. fiat_to_crypto (the default) issues a virtual bank account: fiat deposits convert to a stablecoin and pay out to a wallet, so destinationAddress and destinationPaymentRail are required. Set sourcePaymentRail to 'swift' for a SWIFT collection account: an IBAN that receives international SWIFT transfers, for business customers whose verification is approved and who hold the base_pay_in entitlement; it is not in the customer's name, and settles in USDT on Tron. crypto_to_fiat (an off-ramp route) issues a permanent USDT or USDC deposit address on sourceNetwork: every deposit converts and pays out to one bank account, given as a saved beneficiary (payoutType beneficiary + beneficiaryId) or as bank details. On a crypto_to_fiat route, swiftCode or bicCode is needed only when payoutNetwork is swift. Its deposits are route transactions, read with get_payment_route_history, never transfers. crypto_to_crypto (a swap route) issues a permanent USDT or USDC deposit address on sourceNetwork: every deposit is swapped and delivered to destinationAddress as destinationCurrency on destinationPaymentRail, which must differ from the source in stablecoin, network or both. Its deposits are route transactions too. Deposit handling is set server-side and defaults to auto_payout; change it afterwards with update_payment_route.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `customerId` | string | Yes | The customer ID to create the payment route for |
-| `workflowType` | `fiat_to_crypto` \| `crypto_to_fiat` | No | fiat_to_crypto: a virtual bank account paying out to a wallet. crypto_to_fiat: a permanent stablecoin address paying out to a bank account. Default: `"fiat_to_crypto"`. |
-| `sourceCurrency` | string | Yes | What the customer deposits: a fiat currency for fiat_to_crypto (e.g. 'AUD', 'USD'), or 'USDT' / 'USDC' for crypto_to_fiat |
+| `workflowType` | `fiat_to_crypto` \| `crypto_to_fiat` \| `crypto_to_crypto` | No | fiat_to_crypto: a virtual bank account paying out to a wallet. crypto_to_fiat: a permanent stablecoin address paying out to a bank account. crypto_to_crypto: a permanent stablecoin address whose deposits are swapped to another stablecoin and/or network and sent to a wallet. Default: `"fiat_to_crypto"`. |
+| `sourceCurrency` | string | Yes | What the customer deposits: a fiat currency for fiat_to_crypto (e.g. 'AUD', 'USD'), or 'USDT' / 'USDC' for crypto_to_fiat and crypto_to_crypto |
 | `sourcePaymentRail` | `swift` | No | fiat_to_crypto only. Omit for the currency's local rail. 'swift' opens a SWIFT collection account (business customers with approved verification and base_pay_in). SWIFT currencies: AED, AUD, CAD, CHF, CZK, DKK, EUR, GBP, GEL, HKD, HUF, JPY, NZD, PLN, SEK, SGD, THB, USD; payout USDT on tron |
-| `sourceNetwork` | `arbitrum` \| `avalanche_c_chain` \| `base` \| `celo` \| `ethereum` \| `optimism` \| `polygon` \| `solana` \| `stellar` \| `tron` | No | crypto_to_fiat only, required: the network the deposit address is issued on |
-| `destinationAddress` | string | No | fiat_to_crypto only, required: wallet address deposits are paid out to. Validated against the chosen network |
-| `destinationPaymentRail` | `arbitrum` \| `avalanche_c_chain` \| `base` \| `celo` \| `ethereum` \| `optimism` \| `polygon` \| `solana` \| `stellar` \| `tron` | No | fiat_to_crypto only, required: blockchain network the payout address belongs to |
-| `destinationCurrency` | `usdc` \| `usdt` \| `dai` \| `pyusd` \| `eurc` | No | fiat_to_crypto only: stablecoin to receive. Default: `"usdt"`. |
+| `sourceNetwork` | `arbitrum` \| `avalanche_c_chain` \| `base` \| `celo` \| `ethereum` \| `optimism` \| `polygon` \| `solana` \| `stellar` \| `tron` | No | crypto_to_fiat and crypto_to_crypto, required: the network the deposit address is issued on |
+| `destinationAddress` | string | No | fiat_to_crypto and crypto_to_crypto, required: wallet address deposits are paid out to. Validated against the chosen network |
+| `destinationPaymentRail` | `arbitrum` \| `avalanche_c_chain` \| `base` \| `celo` \| `ethereum` \| `optimism` \| `polygon` \| `solana` \| `stellar` \| `tron` | No | fiat_to_crypto and crypto_to_crypto, required: blockchain network the payout address belongs to |
+| `destinationCurrency` | `usdc` \| `usdt` \| `dai` \| `pyusd` \| `eurc` | No | fiat_to_crypto and crypto_to_crypto: stablecoin to receive. Default: `"usdt"`. |
 | `payoutType` | `bank` \| `beneficiary` | No | crypto_to_fiat only: pay out to bank details given here, or to a saved beneficiary. Default: `"bank"`. |
 | `beneficiaryId` | string | No | crypto_to_fiat with payoutType beneficiary: a saved beneficiary id. Its bank details are copied onto the route; archived beneficiaries are refused |
 | `accountHolderName` | string | No | Account holder's full name, or the company name when recipientType is business |
@@ -427,7 +427,7 @@ Create a payment route for a customer. fiat_to_crypto (the default) issues a vir
 
 #### get_payment_route
 
-Get one payment route by ID, including its deposit instructions (bank details, or an off-ramp route's deposit address) and payout destination
+Get one payment route by ID, including its deposit instructions (bank details, or an off-ramp or swap route's deposit address) and payout destination
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -712,7 +712,7 @@ _No parameters._
 
 #### simulate_route_deposit
 
-SANDBOX ONLY. Simulate a deposit into a payment route so you can watch the conversion and payout complete without real money: a fiat deposit for an on-ramp or fiat-to-fiat route, or the route's USDT/USDC arriving on its address for an off-ramp (crypto_to_fiat) route. Fails on production.
+SANDBOX ONLY. Simulate a deposit into a payment route so you can watch the conversion and payout complete without real money: a fiat deposit for an on-ramp or fiat-to-fiat route, or the route's USDT/USDC arriving on its address for an off-ramp (crypto_to_fiat) or swap (crypto_to_crypto) route. Fails on production.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -721,7 +721,7 @@ SANDBOX ONLY. Simulate a deposit into a payment route so you can watch the conve
 | `amount` | string | Yes | Deposit amount in major units of the route's source currency (e.g. '500.00') |
 | `scenario` | `create_only` \| `completed` \| `failed` | No | 'completed' runs the deposit through to payout, 'failed' exercises the failure path, 'create_only' stops at the deposit. Off-ramp routes take 'completed' only |
 | `senderName` | string | No | Name to attribute the deposit to (fiat routes) |
-| `senderReference` | string | No | Payment reference on the deposit; for an off-ramp route, the sending wallet address |
+| `senderReference` | string | No | Payment reference on the deposit; for an off-ramp or swap route, the sending wallet address |
 | `externalDepositId` | string | No | Your own reference for this deposit |
 
 #### simulate_transfer_deposit
