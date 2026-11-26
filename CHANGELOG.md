@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.6.15] - 2026-11-26
+
+### Added
+- Payout networks: `validate_payment_method` takes every payout network
+  (`bank`, `swift`, `payid`, `mobile_money` and the named schemes `ach`,
+  `fedwire`, `fps`, `chaps`, `sepa`, `sepa_instant`, `fast`, `chats`,
+  `unionpay`) and a `purposeCode`. `create_beneficiary` and
+  `list_beneficiaries` take `bank`, `swift`, `mobile_money` and `unionpay`.
+- Destination fields on `create_transfer`, `create_beneficiary` and
+  `validate_payment_method`: `phone`, mobile money wallets (`walletProvider`,
+  `walletAccount`, `walletAccountType`), a bank address, `nameInLocalLanguage`,
+  `nationalIdentificationNumber`, `branchName` and `paymentRail`.
+  `create_transfer` also takes the per-payout `logisticsTrackingDetails`,
+  `items` and `documents`.
+- `create_quote` takes `destinationAmount` to quote an exact amount received
+  (give it instead of `sourceAmount`), `customerId` and `fundingSource`.
+- `create_transfer` takes `paymentReference`, `accountOwnership` and
+  `sourceWallet`.
+- `get_transfer` shows SWIFT tracking (UETR, MT103), the refund, a compliance
+  hold, the payment reference and account ownership. `list_transfers` filters
+  by `refund_pending`, `refunded` and `refund_failed`.
+  `get_payment_route_history` shows why a deposit failed.
+
+### Changed
+- A mobile money destination needs no `bankName` and takes no bank fields.
+- An address with a street and a country is sent even when the rest is
+  missing. It used to be dropped unless complete.
+- `create_payment_route` and `update_route_destination` are marked as acting
+  outside the organisation: a route pays its destination on every deposit.
+
 ## [2.6.14] - 2026-11-26
 
 ### Added
