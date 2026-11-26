@@ -52,9 +52,12 @@ describe.skipIf(!KEY)("MCP end to end against sandbox", () => {
     };
     const text = result.content.map((c) => c.text ?? "").join("\n");
     expect(result.isError, `${name} returned an error:\n${text}`).toBeFalsy();
-    expect(text, `${name} rendered a missing field:\n${text}`).not.toMatch(
-      /undefined|NaN|\[object Object\]/
-    );
+    // A presigned URL's query string is random base64 and can spell "NaN" by chance, so URLs are
+    // left out of the check.
+    expect(
+      text.replace(/https?:\/\/\S+/g, "<url>"),
+      `${name} rendered a missing field:\n${text}`
+    ).not.toMatch(/undefined|NaN|\[object Object\]/);
     return text;
   }
 
