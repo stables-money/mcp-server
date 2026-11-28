@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.6.16] - 2026-11-28
+
+### Fixed
+- The 30 second request timeout now covers reading the response body. It used
+  to stop once the response headers arrived, so a response that stalled part
+  way through could leave a tool call waiting with no end. A stalled body now
+  times out and is retried like any other timeout.
+
 ## [2.6.15] - 2026-11-26
 
 ### Added
