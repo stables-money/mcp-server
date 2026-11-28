@@ -241,4 +241,80 @@ describe("beneficiary tools", () => {
     expect(init.method).toBe("DELETE");
     expect(text).toBe(`Beneficiary ${ID} (Acme Supplies (EUR)) is archived.`);
   });
+
+  describe("blockchain wallets", () => {
+    const wallet = () =>
+      beneficiary({
+        label: "Acme treasury",
+        network: "crypto",
+        destination: {
+          type: "crypto",
+          recipient_type: "business",
+          account_holder_name: "Acme Supplies GmbH",
+          currency: "USDT",
+          network: "tron",
+          address: "TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE",
+        },
+      });
+
+    it("create_beneficiary posts a crypto destination and shows the wallet", async () => {
+      fetchSpy.mockResolvedValueOnce(json(wallet()));
+      const { result, text } = await call("create_beneficiary", {
+        network: "crypto",
+        label: "Acme treasury",
+        accountHolderName: "Acme Supplies GmbH",
+        recipientType: "business",
+        cryptoCurrency: "USDT",
+        cryptoNetwork: "tron",
+        cryptoAddress: "TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE",
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(JSON.parse(request().init.body as string)).toEqual({
+        network: "crypto",
+        label: "Acme treasury",
+        destination: {
+          type: "crypto",
+          recipient_type: "business",
+          account_holder_name: "Acme Supplies GmbH",
+          currency: "USDT",
+          network: "tron",
+          address: "TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE",
+        },
+      });
+      expect(text).toContain("Wallet: TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE");
+      expect(text).toContain("Blockchain network: tron");
+      expect(text).not.toContain("undefined");
+    });
+
+    it("create_beneficiary refuses a crypto beneficiary without its wallet, before any request", async () => {
+      const { result, text } = await call("create_beneficiary", {
+        network: "crypto",
+        accountHolderName: "Acme Supplies GmbH",
+        cryptoCurrency: "USDT",
+      });
+      expect(result.isError).toBe(true);
+      expect(text).toContain("cryptoCurrency, cryptoNetwork, cryptoAddress and accountHolderName");
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("create_beneficiary refuses wallet fields on a bank network", async () => {
+      const { result } = await call("create_beneficiary", {
+        network: "bank",
+        accountHolderName: "Acme Supplies GmbH",
+        cryptoAddress: "TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE",
+      });
+      expect(result.isError).toBe(true);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("list_beneficiaries lists a wallet by its stablecoin and network", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        json({ beneficiaries: [wallet()], page: { next_page_token: "", total: 1 } })
+      );
+      const { text } = await call("list_beneficiaries", { network: "crypto" });
+      expect(Object.fromEntries(request().url.searchParams)).toEqual({ network: "crypto" });
+      expect(text).toContain(`${ID}: Acme treasury - USDT by crypto, wallet on tron (active)`);
+    });
+  });
 });
