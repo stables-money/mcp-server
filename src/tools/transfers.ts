@@ -44,7 +44,13 @@ export const PAYOUT_NETWORKS = [
 ] as const;
 
 /** Networks a beneficiary can be saved on. PayID aliases are paid per transfer, never stored. */
-export const BENEFICIARY_NETWORKS = ["bank", "swift", "mobile_money", "unionpay"] as const;
+export const BENEFICIARY_NETWORKS = [
+  "bank",
+  "swift",
+  "mobile_money",
+  "unionpay",
+  "crypto",
+] as const;
 
 /** What each payout network is and needs, said once so every tool describes them alike. */
 export const PAYOUT_NETWORK_GUIDE =
@@ -568,7 +574,7 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
         .string()
         .optional()
         .describe(
-          "Saved beneficiary id when destinationType is beneficiary. It supplies the recipient and bank details, so the bank fields are ignored (logisticsTrackingDetails, items and documents still travel with the payout); archived beneficiaries are refused"
+          "Saved beneficiary id when destinationType is beneficiary. A wallet beneficiary (network crypto) is paid by a swap quote for its stablecoin and network. It supplies the recipient and bank details, so the bank fields are ignored (logisticsTrackingDetails, items and documents still travel with the payout); archived beneficiaries are refused"
         ),
 
       ...bankDestinationShape,
@@ -608,7 +614,7 @@ export function registerTransferTools(server: McpServer, client: StablesApiClien
         .enum(["first_party", "third_party"])
         .optional()
         .describe(
-          "Whose bank account the payout pays: the customer's own (first_party) or someone else's (third_party). A third_party payout needs a purposeCode, and is refused where this type of customer may only pay their own account. No effect on a crypto destination"
+          "Whose bank account the payout pays, or whose wallet a swap delivers to: the customer's own (first_party) or someone else's (third_party). A third_party bank payout needs a purposeCode, and is refused where this type of customer may only pay their own account. On a swap it is recorded as declared"
         ),
       sourceWallet: z
         .object({

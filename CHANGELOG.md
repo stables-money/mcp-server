@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Wallet beneficiaries: `create_beneficiary` saves a blockchain wallet with
+  network `crypto` (`cryptoCurrency`, `cryptoNetwork`, `cryptoAddress`,
+  `accountHolderName` and `recipientType`). `list_beneficiaries` filters by
+  `crypto` and by stablecoin, and `get_beneficiary` shows the wallet.
+- `create_transfer` pays a wallet beneficiary by id from a swap quote for its
+  stablecoin and network, and `accountOwnership` on a swap records whose
+  wallet is paid.
+
 ## [2.6.16] - 2026-11-28
 
 ### Fixed

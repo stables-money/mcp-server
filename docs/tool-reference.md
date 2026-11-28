@@ -280,7 +280,7 @@ Create a transfer from an active quote. The quote must not be expired. With fund
 | `customerId` | string | Yes | The customer ID for this transfer |
 | `quoteId` | string | Yes | The quote ID to execute |
 | `destinationType` | `bank` \| `crypto` \| `beneficiary` | No | Payout target: a bank account (off-ramp), a wallet address (swap), or a saved beneficiary. Default: `"bank"`. |
-| `beneficiaryId` | string | No | Saved beneficiary id when destinationType is beneficiary. It supplies the recipient and bank details, so the bank fields are ignored (logisticsTrackingDetails, items and documents still travel with the payout); archived beneficiaries are refused |
+| `beneficiaryId` | string | No | Saved beneficiary id when destinationType is beneficiary. A wallet beneficiary (network crypto) is paid by a swap quote for its stablecoin and network. It supplies the recipient and bank details, so the bank fields are ignored (logisticsTrackingDetails, items and documents still travel with the payout); archived beneficiaries are refused |
 | `accountHolderName` | string | No | Account holder's full name, or the company name when recipientType is business |
 | `bankName` | string | No | Name of the destination bank. Required unless paying a mobile money wallet |
 | `bankCountry` | string | No | Bank country, ISO 2-letter (e.g. 'AU', 'US'). For mobile money, the country of the wallet |
@@ -327,7 +327,7 @@ Create a transfer from an active quote. The quote must not be expired. With fund
 | `destinationAddress` | string | No | Wallet address when destinationType is crypto. It must be valid on destinationNetwork: funds sent to a wrong address cannot be recovered |
 | `purposeCode` | `PAYMENT_FOR_SERVICES` \| `PAYMENT_FOR_SOFTWARE` \| `PAYMENT_FOR_IMPORTED_GOODS` \| `TRAVEL_SERVICES` \| `VENDOR_CONTRACTOR_PAYOUTS` \| `TRANSFER_TO_OWN_ACCOUNT` \| `INVESTMENT_IN_SHARES` \| `PURCHASE_OF_PROPERTY` \| `REPAYMENT_OF_LOANS` \| `SALARY` \| `PAYMENT_OF_PROPERTY_RENTAL` \| `INFORMATION_SERVICE_CHARGES` \| `ADVERTISING_PR_EXPENSES` \| `ROYALTY_FEES` \| `BROKER_COMMITMENT_FEES` \| `ADVISOR_TECHNICAL_FEES` \| `REPRESENTATIVE_OFFICE_EXPENSES` \| `TAX_PAYMENT` \| `TRANSPORTATION_FEES_FOR_GOODS` \| `CONSTRUCTION_COSTS` \| `INSURANCE_PREMIUM` \| `GENERAL_GOODS_TRADES` \| `INSURANCE_CLAIMS_PAYMENT` \| `FAMILY_MAINTENANCE` \| `EDUCATION_EXPENSES` \| `MEDICAL_TREATMENT` \| `DONATIONS` \| `MUTUAL_FUND_INVESTMENT` \| `CURRENCY_EXCHANGE` \| `USER_WITHDRAWAL` \| `ADVANCE_PAYMENTS_FOR_GOODS` \| `VENDOR_CONTRACTOR_SOFTWARE_PAYOUTS` \| `MERCHANT_SETTLEMENT` \| `REPATRIATION_FUND_SETTLEMENT` \| `PERSONAL_REMITTANCE` \| `RETURN_OF_FUNDS` | No | Purpose of the transfer (e.g. 'SALARY'). Required on some corridors |
 | `paymentReference` | string | No | Text sent with a bank payout so the recipient can tell what it is for, such as an invoice number. Up to 35 characters: letters, digits, spaces and / - ? : ( ) . , ' + only. Some payouts carry less and refuse a reference that does not fit. No effect on a crypto destination |
-| `accountOwnership` | `first_party` \| `third_party` | No | Whose bank account the payout pays: the customer's own (first_party) or someone else's (third_party). A third_party payout needs a purposeCode, and is refused where this type of customer may only pay their own account. No effect on a crypto destination |
+| `accountOwnership` | `first_party` \| `third_party` | No | Whose bank account the payout pays, or whose wallet a swap delivers to: the customer's own (first_party) or someone else's (third_party). A third_party bank payout needs a purposeCode, and is refused where this type of customer may only pay their own account. On a swap it is recorded as declared |
 | `sourceWallet` | object | No | Custody of the wallet the customer will send from, for the travel rule. Defaults to self_hosted when omitted |
 | `fundingSource` | `fund_transfer` \| `prefund_balance` | No | fund_transfer (default) creates the transfer and returns deposit instructions; nothing moves until a person deposits the funds. prefund_balance debits your organisation's balance and starts the payout immediately, so it needs explicit human approval. Check get_balance first: transfers_enabled must be true and the quote's source asset must be held on its network |
 | `metadata` | object | No | Optional metadata |
@@ -360,16 +360,16 @@ List the organisation's saved beneficiaries, most recently paid first. Use it to
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `currency` | string | No | Only beneficiaries paid in this currency (e.g. 'EUR') |
-| `network` | `bank` \| `swift` \| `mobile_money` \| `unionpay` | No | Only beneficiaries paid by this network: bank, swift, mobile_money (a wallet) or unionpay (personal remittance to mainland China in CNY) |
+| `currency` | string | No | Only beneficiaries paid in this currency (e.g. 'EUR'), or wallets for this stablecoin (e.g. 'USDT') |
+| `network` | `bank` \| `swift` \| `mobile_money` \| `unionpay` \| `crypto` | No | Only beneficiaries paid by this network: bank, swift, mobile_money (a mobile money wallet), unionpay (personal remittance to mainland China in CNY) or crypto (blockchain wallets) |
 | `status` | `active` \| `archived` \| `all` | No | Defaults to active. Archived beneficiaries cannot be paid |
-| `search` | string | No | Case-insensitive match on label, account holder or bank name |
+| `search` | string | No | Case-insensitive match on label, account holder, bank name or wallet address |
 | `pageSize` | number | No | Beneficiaries per page (default 50, max 100) |
 | `pageToken` | string | No | Token for the next page of results |
 
 #### get_beneficiary
 
-Get a saved beneficiary's recipient and bank details, and whether it still passes today's payout rules. Rules tighten over time, so an older beneficiary can need more fields before it can be paid.
+Get a saved beneficiary's recipient and bank or wallet details, and whether it still passes today's payout rules. Rules tighten over time, so an older beneficiary can need more fields before it can be paid.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -377,12 +377,15 @@ Get a saved beneficiary's recipient and bank details, and whether it still passe
 
 #### create_beneficiary
 
-Save a recipient and their bank account or mobile money wallet for a currency and network, so later transfers can pay it by id. The details are validated exactly as a transfer on that network would be. Saving an account that is already saved returns the existing beneficiary with its details refreshed, and revives it if archived. For mobile_money send walletProvider and walletAccount with accountHolderName, bankCountry and bankCurrency, and no bank fields. A CNY bank payout needs nameInLocalLanguage and nationalIdentificationNumber, and for goods trade (purposeCode GENERAL_GOODS_TRADES) logisticsTrackingDetails and items; the goods details travel with each transfer, not the saved beneficiary. PayID aliases are paid per transfer and cannot be saved.
+Save a recipient and their bank account, mobile money wallet or blockchain wallet, so later transfers can pay it by id. The details are validated exactly as a transfer on that network would be. Saving an account that is already saved returns the existing beneficiary with its details refreshed, and revives it if archived. For a blockchain wallet set network to crypto and send cryptoCurrency, cryptoNetwork and cryptoAddress with accountHolderName (and recipientType), and no bank fields; it is then paid by a swap quote for that stablecoin and network. For mobile_money send walletProvider and walletAccount with accountHolderName, bankCountry and bankCurrency, and no bank fields. A CNY bank payout needs nameInLocalLanguage and nationalIdentificationNumber, and for goods trade (purposeCode GENERAL_GOODS_TRADES) logisticsTrackingDetails and items; the goods details travel with each transfer, not the saved beneficiary. PayID aliases are paid per transfer and cannot be saved.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `network` | `bank` \| `swift` \| `mobile_money` \| `unionpay` | Yes | Network the beneficiary is paid by: bank = local transfer, swift = international wire, mobile_money = a mobile money wallet (walletProvider and walletAccount, no bank fields), unionpay = personal remittance to a bank account in mainland China in CNY (purposeCode PERSONAL_REMITTANCE or USER_WITHDRAWAL on the transfer, and the customer needs the cny_unionpay entitlement) |
+| `network` | `bank` \| `swift` \| `mobile_money` \| `unionpay` \| `crypto` | Yes | Network the beneficiary is paid by: bank = local transfer, swift = international wire, mobile_money = a mobile money wallet (walletProvider and walletAccount, no bank fields), crypto = a blockchain wallet (cryptoCurrency, cryptoNetwork and cryptoAddress, no bank fields), unionpay = personal remittance to a bank account in mainland China in CNY (purposeCode PERSONAL_REMITTANCE or USER_WITHDRAWAL on the transfer, and the customer needs the cny_unionpay entitlement) |
 | `label` | string | No | Display name (e.g. 'Acme Supplies (EUR)'). Defaults to the account holder name |
+| `cryptoCurrency` | string | No | Stablecoin the wallet receives when network is crypto (e.g. 'USDT') |
+| `cryptoNetwork` | string | No | Blockchain network of the wallet when network is crypto (e.g. 'tron') |
+| `cryptoAddress` | string | No | Wallet address when network is crypto. It must be valid on cryptoNetwork: funds sent to a wrong address cannot be recovered |
 | `accountHolderName` | string | No | Account holder's full name, or the company name when recipientType is business |
 | `bankName` | string | No | Name of the destination bank. Required unless paying a mobile money wallet |
 | `bankCountry` | string | No | Bank country, ISO 2-letter (e.g. 'AU', 'US'). For mobile money, the country of the wallet |

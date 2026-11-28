@@ -315,8 +315,22 @@ export type PayoutNetwork =
   | "chats"
   | "unionpay";
 
-/** Networks a beneficiary can be saved on. PayID aliases are paid per transfer, never stored. */
-export type BeneficiaryNetwork = "bank" | "swift" | "mobile_money" | "unionpay";
+/**
+ * Networks a beneficiary can be saved on. PayID aliases are paid per transfer, never stored.
+ * `crypto` is a blockchain wallet, paid by a swap.
+ */
+export type BeneficiaryNetwork = "bank" | "swift" | "mobile_money" | "unionpay" | "crypto";
+
+/** A blockchain wallet beneficiary: a stablecoin at an address on one network. */
+export interface WalletBeneficiaryDestination {
+  type: "crypto";
+  recipient_type?: "individual" | "business";
+  /** The owner's full legal name, or the business's name. */
+  account_holder_name: string;
+  currency: string;
+  network: string;
+  address: string;
+}
 
 /**
  * A payout address, per PayoutAddressApiSchema: street and country are always needed, the rest
@@ -433,14 +447,17 @@ export interface BeneficiaryTransferDestination extends PayoutExtras {
   beneficiary_id: string;
 }
 
-/** A recipient and bank account saved once and paid later by id. */
+/** A recipient and bank account (or blockchain wallet) saved once and paid later by id. */
 export interface Beneficiary {
   id: string;
   /** Organisation-chosen display name. */
   label: string | null;
   status: "active" | "archived";
-  network: PayoutNetwork;
-  destination: Omit<BankTransferDestination, "pay_id" | "pay_id_type" | keyof PayoutExtras>;
+  /** `crypto` for a blockchain wallet, whose own network is `destination.network`. */
+  network: PayoutNetwork | "crypto";
+  destination:
+    | Omit<BankTransferDestination, "pay_id" | "pay_id_type" | keyof PayoutExtras>
+    | WalletBeneficiaryDestination;
   /** Whether the saved details still pass today's payout rules. */
   validation: ValidatePaymentMethodResponse;
   last_used_at: string | null;
@@ -452,7 +469,7 @@ export interface Beneficiary {
 export interface CreateBeneficiaryRequest {
   network: BeneficiaryNetwork;
   label?: string;
-  destination: BankTransferDestination;
+  destination: BankTransferDestination | WalletBeneficiaryDestination;
 }
 
 export interface ListBeneficiariesResponse {
