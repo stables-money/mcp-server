@@ -1133,7 +1133,8 @@ export class StablesApiClient {
         return {} as T;
       }
 
-      return response.json();
+      // Keep the timeout active until the body has finished loading as well.
+      return await response.json();
     } catch (error) {
       if (error instanceof StablesApiError) {
         throw error;

@@ -292,22 +292,69 @@ describe("StablesApiClient", () => {
   });
 
   describe("timeout handling", () => {
-    it("aborts request after timeout and wraps as StablesApiError", async () => {
-      fetchSpy.mockImplementationOnce(
-        (_url, opts) =>
-          new Promise((_resolve, reject) => {
-            opts?.signal?.addEventListener("abort", () => {
-              reject(new DOMException("The operation was aborted.", "AbortError"));
-            });
-          })
+    // Fetch resolves as soon as headers arrive. Reading its body still needs
+    // the request's abort signal, even though the response status is already 200.
+    function slowBody(signal: AbortSignal): Response {
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            const timer = setTimeout(() => {
+              controller.enqueue(new TextEncoder().encode('{"customers":[]}'));
+              controller.close();
+            }, 31_000);
+            signal.addEventListener(
+              "abort",
+              () => {
+                clearTimeout(timer);
+                controller.error(new DOMException("The operation was aborted.", "AbortError"));
+              },
+              { once: true }
+            );
+          },
+        }),
+        { headers: { "content-type": "application/json" } }
       );
+    }
 
-      // Temporarily speed up timeout for test
-      // We can't easily change the constant, so we'll verify the abort signal is set
-      void client.getCustomer("slow");
-      // The signal should be set on the fetch call
-      const [, opts] = fetchSpy.mock.calls[0];
-      expect(opts?.signal).toBeInstanceOf(AbortSignal);
+    it("times out a stalled response body and wraps the final error", async () => {
+      vi.useFakeTimers();
+      try {
+        fetchSpy.mockImplementation(async (_url, opts) => slowBody(opts!.signal!));
+        const request = client.listCustomers().catch((error: unknown) => error);
+
+        await vi.runAllTimersAsync();
+
+        const error = await request;
+        expect(error).toBeInstanceOf(StablesApiError);
+        expect(error).toMatchObject({
+          message: "Request timed out after 30s",
+          statusCode: 0,
+          endpoint: "/api/v1/customers",
+        });
+        expect(fetchSpy).toHaveBeenCalledTimes(4);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("retries after a body timeout and returns a later successful response", async () => {
+      vi.useFakeTimers();
+      try {
+        const customers = { customers: [{ customer_id: "cust_123" }] };
+        fetchSpy
+          .mockImplementationOnce(async (_url, opts) => slowBody(opts!.signal!))
+          .mockResolvedValueOnce(mockResponse(customers));
+        const request = client.listCustomers();
+
+        await vi.runAllTimersAsync();
+
+        expect(await request).toEqual(customers);
+        expect(fetchSpy).toHaveBeenCalledTimes(2);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
